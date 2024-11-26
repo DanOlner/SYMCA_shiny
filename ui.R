@@ -2,6 +2,8 @@
 #Saved in server
 sectors<- readRDS('data/initialSectionNames.rds')
 
+#Hardcoding range for now
+#range(ch$Employees_thisyear[ch$SIC_SECTION_NAME=='Manufacturing'], na.rm = T)
 
 # ui elements  ----
 
@@ -47,7 +49,7 @@ summary_panel <-
 
 fluidPage(
 
-    titlePanel("South Yorkshire business map"),
+    titlePanel("South Yorkshire Companies House map"),
 
     # Output: Tabset w/ plot, summary, and table ----
     tabsetPanel(type = "tabs",
@@ -59,7 +61,10 @@ fluidPage(
                              p(
                                'Drag & zoom'
                              ),
-                             summary_input_panel()
+                             summary_input_panel(),
+                             sliderInput("employee_count_range",
+                                         label = "Employee count range (inclusive):",
+                                         min = 0, max = 957, value = c(11,957))#see above, hardcoding initial, will update when sector changed
                              # area_searcher_panel()
                            ),
                            mainPanel(

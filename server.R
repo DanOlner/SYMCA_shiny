@@ -10,9 +10,39 @@ if(is_inst("reactlog")){
 }
 
 
-#DATA----
+#DATA (including a little pre-processing)----
 
+
+
+
+
+#companies house data for South Yorkshire
 ch <- readRDS('data/companieshouse_employees_n_sectors_southyorkshire.rds')
+#Convert to latlon and resave
+# ch <- ch %>% st_transform("EPSG:4326")
+
+#Two entries with employee values filled in by error, from financials
+#Remove
+# ch <- ch %>% filter(!CompanyNumber %in% c('08638732','11756651'))
+# saveRDS(ch,'data/companieshouse_employees_n_sectors_southyorkshire.rds')
+
+
+
+
+
+#South yorkshire local authority boundaries
+# sy_boundaries <- st_read("data/mapdata/sy_localauthorityboundaries.shp")
+
+#Convert to latlon and save as compressed
+# sy_boundaries <- sy_boundaries %>% st_transform("EPSG:4326")
+# saveRDS(sy_boundaries, 'data/mapdata/sy_localauthorityboundaries.rds')
+
+#load once processed
+sy_boundaries <- readRDS('data/mapdata/sy_localauthorityboundaries.rds')
+
+
+
+
 
 #SIC digit names from the columns - needs reordering
 SICdigitnames <- colnames(ch)[which(colnames(ch) %in% c('SIC_SECTION_NAME','SIC_2DIGIT_NAME','SIC_3DIGIT_NAME','SIC_5DIGIT_NAME'))][c(4,2,3,1)]
@@ -24,12 +54,12 @@ selectedSIClevel <- 1
 # sectors <- unique(ch[SICdigitnames[selectedSIC]])
 
 #Un-geo first
-sectors <- ch %>%
-  st_set_geometry(NULL) %>%
-  select(SICdigitnames[selectedSIClevel]) %>%
-  filter(!is.na(.[,1])) %>% # get rid of NAs in the one remaining column
-  distinct() %>%
-  pull
+# sectors <- ch %>%
+#   st_set_geometry(NULL) %>%
+#   select(SICdigitnames[selectedSIClevel]) %>%
+#   filter(!is.na(.[,1])) %>% # get rid of NAs in the one remaining column
+#   distinct() %>%
+#   pull
 
 #Save copy so UI to use when loaded...
 #Will load in there so don't need initial code here
@@ -40,7 +70,7 @@ sectors <- ch %>%
 
 reactive_values <- 
   reactiveValues(
-    sic_name = selectedSIClevel, #What digit level to show? 1 is SIC section
+    sic_level = selectedSIClevel, #What digit level to show? 1 is SIC section
     sectors.livelist = readRDS('data/initialSectionNames.rds') # Named SIC sectors  - can change digit, so can drill down or up, need to repopulate this each time
   )
 
@@ -57,30 +87,6 @@ function(input, output, session) {
   
   #OBSERVED EVENTS----
   
-  ## This will set the sector first, from what the default in the input$sector_chosen is
-  # observeEvent(input$sector_chosen,{
-  #   
-  #   cat('input$area_chosen observe triggered.\n')
-  #   
-  #   #problem this fixes: input invalidates as soon as a letter is deleted.
-  #   #Could also use on of these as well, but let's just check the field is sensible before changing
-  #   #https://shiny.rstudio.com/reference/shiny/1.7.0/debounce.html
-  #   if(isolate(input$area_chosen) %in% isolate(sectors.livelist)){
-  #     
-  #     # drawLSOAs(isolate(map_df()))
-  #     
-  #     cat('And sectors found.\n')
-  #     
-  #   } else (
-  #     
-  #     cat('... but sectors not found yet. Hang on. \n')
-  #     
-  #   )
-  #   
-  # }, ignoreInit = T
-  # )
-  # 
-  # 
   
   
   
@@ -94,7 +100,16 @@ function(input, output, session) {
   #Subset firm data to the appropriate sector(s)
   map_df = reactive({
     
-    firms_to_view <- ch %>% filter(reactive_values$sic_name == input$sector_chosen)
+    #Select sector name from appropriate sector SIC level column
+    # firms_to_view <- ch %>% filter(SICdigitnames[reactive_values$sic_level] == input$sector_chosen)
+    firms_to_view <- ch %>% filter(
+      SIC_SECTION_NAME == isolate(input$sector_chosen),
+      between(Employees_thisyear,isolate(input$employee_count_range[1]),isolate(input$employee_count_range[2]))
+      )
+    
+    cat("In map_df. reactive_values$sic_level is: ", reactive_values$sic_level,"\n")
+    cat("... input$sector_chosen is: ", input$sector_chosen,"\n")
+    cat("... Size of filtered firms: ", firms_to_view %>% nrow,"\n")
     
     return(firms_to_view)
     
@@ -102,6 +117,38 @@ function(input, output, session) {
   
   
   
+  #Add in the selected firms
+  draw_firms <- function(mapdata){
+    
+    #Clear previous circlemarkers
+    leafletProxy("map") %>% clearGroup("firms")
+    leafletProxy("map") %>% clearControls()#clear legend before new one drawn
+    
+    # palette <- colorNumeric(palette = "BrBG", domain = mapdata$Employees_thisyear, na.color="transparent")
+    
+    #Own-made bins using classInt
+    fisher_breaks <- classInt::classIntervals(mapdata$Employees_thisyear, n = 7, style = "fisher")$brks
+    
+    palette <- colorBin(palette = "RdBu", bins = fisher_breaks, domain = ch.manuf$Employees_thisyear)
+    
+    
+    leafletProxy('map') %>%
+      addCircleMarkers(
+        data = mapdata,
+        label = ~Company,#label will be the marker hover
+        radius = ~ scales::rescale(Employees_thisyear, c(1,30)),
+        color = ~palette(Employees_thisyear),
+        fillColor = ~palette(Employees_thisyear),
+        group = 'firms'
+        # popup = paste0("Title", "<hr>", "Text 1", "<br>", "Text 2")) 
+        ) %>%
+      addLegend("topright", pal = palette, values = mapdata$Employees_thisyear,
+                    title = "Employee count",
+                    opacity = 1) %>%
+      addScaleBar("topleft")
+    
+    
+  }
   
   
   
@@ -117,9 +164,12 @@ function(input, output, session) {
     #Set zoom fractional jumps for a bit more zoom control
     #https://stackoverflow.com/a/62863122/5023561
     leaflet(options = leafletOptions(zoomSnap = 0.1, zoomDelta=0.7, minZoom = 7)) %>%
-      addTiles() %>%
+      addProviderTiles(providers$CartoDB.Positron) %>% #https://rstudio.github.io/leaflet/articles/basemaps.html
+      # addTiles() %>%
       # setView(lng = -2, lat = 53, zoom = 7.2)#UK wide view
-      setView(lng = 0, lat = 51.4, zoom = 10)#London view
+      # setView(lng = 0, lat = 51.4, zoom = 10)#London view
+      setView(lng = -1.265910, lat = 53.441159, zoom = 10.7)#SY view
+    
     
   })
   
@@ -132,18 +182,44 @@ function(input, output, session) {
   #Add initial dynamic elements
   observe({
     
-    cat("Leaflet proxy call.")
+    cat("Leaflet proxy call.\n")
     
     #Change map when variable changed
     #See https://rstudio.github.io/leaflet/shiny.html -
     #Avoids redrawing whole map after each change
     
+    #Add in SY boundaries
+    leafletProxy('map') %>%
+      addPolygons(
+        data = sy_boundaries,
+        fill = F,
+        color = 'black',
+        weight = 2,
+        opacity = 1
+        # group = "sy_outline"
+      ) 
+    
     #Only call back to map_df reactive once (though it's cached unless input changes, so shouldn't matter...)
     mapdata <- map_df()
     
-    # draw_firms(mapdata)
+    
+    #Update slideer range for selected sector
+    updateSliderInput(session, "employee_count_range", 
+                      value = min(mapdata$Employees_thisyear) + 10, 
+                      min = min(mapdata$Employees_thisyear), 
+                      max = max(mapdata$Employees_thisyear), 
+                      step = 1
+    )
+    
+    cat("range bar: ", isolate(input$employee_count_range),"\n")
+    
+    draw_firms(mapdata)
     
   })
+  
+  
+ 
+  
   
    
 
