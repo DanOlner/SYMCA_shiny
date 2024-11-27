@@ -88,48 +88,43 @@ function(input, output, session) {
   
   #OBSERVED EVENTS----
   
+  #What's going on with firm data filters:
+  #A single reactive filter for each different selection type e.g. sector name or employee range
+  #A single reactive filter that combines all those
+  #That last reactive filter is the one that leaftet proxy reactive knows about
   
+  #Filter sector when sector dropdown changes
+  filter_by_sector <- reactive({
+    
+    ch %>% filter(
+      SIC_SECTION_NAME == input$sector_chosen
+    )
+    
+  })
+  
+  #Filter sector when sector dropdown changes
+  filter_by_employee <- reactive({
+    
+    ch %>% filter(
+      between(Employees_thisyear,input$employee_count_range[1],isolate(input$employee_count_range[2]))#isolate one of them, only get triggered once
+    )
+    
+  })
+  
+  
+  #Combine different filters, retriggered if any of them changed, then invalidates leaflet proxy for redraw
+  combined_filters <- reactive({
+   
+    filter_by_sector() %>% filter(CompanyNumber %in% filter_by_employee()$CompanyNumber)
+     
+  })
   
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~
   #MAP CODE------------------
   #~~~~~~~~~~~~~~~~~~~~~~~~~~
   
-  ##MAP FUNCTIONS----
-  
-  #User can choose which sector and sector type will be shown in the top level geography
-  #Subset firm data to the appropriate sector(s)
-  map_df = reactive({
-    
-    #Select sector name from appropriate sector SIC level column
-    # firms_to_view <- ch %>% filter(SICdigitnames[reactive_values$sic_level] == input$sector_chosen)
-    firms_to_view <- ch %>% filter(
-      SIC_SECTION_NAME == isolate(input$sector_chosen),
-      between(Employees_thisyear,isolate(input$employee_count_range[1]),isolate(input$employee_count_range[2]))
-      )
-    
-    cat("In map_df. reactive_values$sic_level is: ", reactive_values$sic_level,"\n")
-    cat("... input$sector_chosen is: ", input$sector_chosen,"\n")
-    cat("... Size of filtered firms: ", firms_to_view %>% nrow,"\n")
-    
-    #Update slideer range for selected sector
-    cat('min employees this year: ', min(firms_to_view$Employees_thisyear),'\n')
-    
-    # updateSliderInput(session, "employee_count_range", 
-    #                   value = min(firms_to_view$Employees_thisyear) + 10, 
-    #                   min = 0, 
-    #                   max = max(firms_to_view$Employees_thisyear), 
-    #                   step = 1
-    # )
-    
-    cat("range bar: ", isolate(input$employee_count_range),"\n")
-    
-    
-    return(firms_to_view)
-    
-  })
-  
-  
+  ## MAP FUNCTIONS----
   
   #Add in the selected firms
   draw_firms <- function(mapdata){
@@ -215,10 +210,7 @@ function(input, output, session) {
         # group = "sy_outline"
       ) 
     
-    #Only call back to map_df reactive once (though it's cached unless input changes, so shouldn't matter...)
-    mapdata <- map_df()
-    
-    draw_firms(mapdata)
+    draw_firms(combined_filters())
     
   })
   
@@ -228,4 +220,4 @@ function(input, output, session) {
   
    
 
-}#END INPUT OUTPUT SESSION FUNCTION
+}#END MAIN INPUT OUTPUT SESSION FUNCTION
