@@ -70,8 +70,9 @@ selectedSIClevel <- 1
 
 reactive_values <- 
   reactiveValues(
+    firms_to_view = ch,
     sic_level = selectedSIClevel, #What digit level to show? 1 is SIC section
-    sectors.livelist = readRDS('data/initialSectionNames.rds') # Named SIC sectors  - can change digit, so can drill down or up, need to repopulate this each time
+    # sectors.livelist = readRDS('data/initialSectionNames.rds') # Named SIC sectors  - can change digit, so can drill down or up, need to repopulate this each time
   )
 
 
@@ -110,6 +111,19 @@ function(input, output, session) {
     cat("In map_df. reactive_values$sic_level is: ", reactive_values$sic_level,"\n")
     cat("... input$sector_chosen is: ", input$sector_chosen,"\n")
     cat("... Size of filtered firms: ", firms_to_view %>% nrow,"\n")
+    
+    #Update slideer range for selected sector
+    cat('min employees this year: ', min(firms_to_view$Employees_thisyear),'\n')
+    
+    # updateSliderInput(session, "employee_count_range", 
+    #                   value = min(firms_to_view$Employees_thisyear) + 10, 
+    #                   min = 0, 
+    #                   max = max(firms_to_view$Employees_thisyear), 
+    #                   step = 1
+    # )
+    
+    cat("range bar: ", isolate(input$employee_count_range),"\n")
+    
     
     return(firms_to_view)
     
@@ -159,6 +173,8 @@ function(input, output, session) {
   #See https://rstudio.github.io/leaflet/shiny.html
   output$map <- renderLeaflet({
     
+    cat('Output map initial leaflet render.\n')
+    
     
     #Only static elements, observe below will do the dynamics
     #Set zoom fractional jumps for a bit more zoom control
@@ -201,17 +217,6 @@ function(input, output, session) {
     
     #Only call back to map_df reactive once (though it's cached unless input changes, so shouldn't matter...)
     mapdata <- map_df()
-    
-    
-    #Update slideer range for selected sector
-    updateSliderInput(session, "employee_count_range", 
-                      value = min(mapdata$Employees_thisyear) + 10, 
-                      min = min(mapdata$Employees_thisyear), 
-                      max = max(mapdata$Employees_thisyear), 
-                      step = 1
-    )
-    
-    cat("range bar: ", isolate(input$employee_count_range),"\n")
     
     draw_firms(mapdata)
     
