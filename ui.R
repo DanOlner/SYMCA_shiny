@@ -1,19 +1,34 @@
 #Load initial SIC section names - need to populate dropdown in the UI
-#Saved in server
-sectors<- readRDS('data/initialSectionNames.rds')
+default_digit = "Section"
+# default_digit = "2 digit"
 
-#Hardcoding range for now
-#range(ch$Employees_thisyear[ch$SIC_SECTION_NAME=='Manufacturing'], na.rm = T)
+#Load list of sectors based on what SIC digit we're viewing
+sectors<- readRDS('data/SICorderedlookup.rds') %>% filter(SIC_digit == default_digit) %>% select(sector_name) %>% pull %>% unique
+
+
+default_sector = "Manufacturing"
+# default_sector = "72 : Scientific research and development"
 
 # ui elements  ----
 
-summary_input_panel <-
+sectorselect_input_panel <-
   function(){
     selectInput(
       inputId = 'sector_chosen',
-      label = 'To choose a sector to view, begin inputting its name below:',
+      label = 'Select sector from dropdown or begin inputting its name below:',
       choices = sectors,
-      selected = 'Manufacturing',
+      selected = default_sector,
+      selectize = T
+    )
+  }
+
+sicdigitselect_input_panel <-
+  function(){
+    selectInput(
+      inputId = 'sicdigit_chosen',
+      label = 'Select SIC digit level (Section to 5 digit)',
+      choices = readRDS('data/initialSICDigitNames.rds'),
+      selected = default_digit,
       selectize = T
     )
   }
@@ -58,13 +73,12 @@ fluidPage(
                          sidebarLayout(
                            sidebarPanel(
                              h4(strong("Explore sectors")),
-                             p(
-                               'Drag & zoom'
-                             ),
-                             summary_input_panel(),
+                             sectorselect_input_panel(),
+                             sicdigitselect_input_panel(),
                              sliderInput("employee_count_range",
                                          label = "Employee count range (inclusive):",
-                                         min = 0, max = 957, value = c(11,957))#see above, hardcoding initial, will update when sector changed
+                                         min = 0, max = 957, value = c(11,957))
+                                         # min = 0, max = 31, value = c(10,31))
                              # area_searcher_panel()
                            ),
                            mainPanel(
@@ -72,7 +86,7 @@ fluidPage(
                          ) 
                 ),
                 
-                summary_panel('Summary and plots'),
+                summary_panel('Analytics'),
                 
                 about_tab_panel('About')
                 
