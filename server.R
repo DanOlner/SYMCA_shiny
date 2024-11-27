@@ -89,13 +89,23 @@ selectedSIClevel <- 1
 #Will load in there so don't need initial code here
 # saveRDS(sectors,'data/initialSectionNames.rds')
 
+reactive_values <- 
+  reactiveValues(
+    count_of_firms = 0
+  )
 
 
 #SERVER FUNCTIONS----
 
 function(input, output, session) {
+  
+  # MISC REACTIVES----
+  
+  output$firm_count <- renderUI(HTML(paste0("Number of firms displayed: <strong>", reactive_values$count_of_firms, "</strong>")))
+  
+  
  
-  #OBSERVED EVENTS----
+  #OBSERVED EVENTS FOR THE COMPANIES HOUSE DATAFRAME----
   
   #What's going on with firm data filters:
   #A single reactive filter for each different selection type e.g. sector name or employee range
@@ -160,19 +170,9 @@ function(input, output, session) {
   #Filter sector when sector dropdown changes
   filter_by_employee <- reactive({
     
-    df <- NULL
-    
-    #Check that change doesn't go beyond available data range
-    # if(
-    #   isolate(input$employee_count_range[1]) >= min(isolate(filter_by_sector()$Employees_thisyear)) &
-    #   isolate(input$employee_count_range[2]) <= max(isolate(filter_by_sector()$Employees_thisyear))   
-    #   ){
-    # 
-      df <- ch %>% filter(
-        between(Employees_thisyear,input$employee_count_range[1],isolate(input$employee_count_range[2]))#isolate one of them, only get triggered once
-      )
-      
-    # }
+    df <- ch %>% filter(
+      between(Employees_thisyear,input$employee_count_range[1],isolate(input$employee_count_range[2]))#isolate one of them, only get triggered once
+    )
     
     cat('df being used in employee range selection trigger:\n')
     glimpse(df)
@@ -212,6 +212,9 @@ function(input, output, session) {
     cat('component parts going into that (1) = filter_by_employee df (we just printed the subset, that should be fine): \n')
     glimpse(isolate(filter_by_employee()))
     
+    #set count of firms to display
+    reactive_values$count_of_firms <- nrow(df_subset)
+    
     return(df_subset)
      
   })
@@ -239,15 +242,7 @@ function(input, output, session) {
                       max = max(df$Employees_thisyear),
                       step = 1
     )
-    
-    # #Update slideer range for selected sector
-    # updateSliderInput(session, "employee_count_range", 
-    #                   value = min(filter_by_sector()$Employees_thisyear) + 10, 
-    #                   min = 0, 
-    #                   max = max(isolate(filter_by_sector()$Employees_thisyear)), 
-    #                   step = 1
-    # )
-    # 
+     
     cat("range bar: ", isolate(input$employee_count_range),"\n")
     
   })
