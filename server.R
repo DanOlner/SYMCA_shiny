@@ -21,6 +21,11 @@ if(is_installed("reactlog")){
 #Version with SIC digit types in a single column
 ch <- readRDS('data/companieshouse_employees_n_sectors_southyorkshire_long.rds')
 
+ch <- ch %>%
+  mutate(
+    employee_diff_percent = ((Employees_thisyear - Employees_lastyear)/Employees_lastyear) * 100
+  )
+
 #Convert to latlon and resave
 # ch <- ch %>% st_transform("EPSG:4326")
 
@@ -277,8 +282,8 @@ function(input, output, session) {
         radius = ~ scales::rescale(Employees_thisyear, c(1,50)),
         color = ~palette(Employees_thisyear),
         fillColor = ~palette(Employees_thisyear),
+        popup = paste0("<strong>",mapdata$Company,"</strong><br>","Employees this year: ",mapdata$Employees_thisyear,"<br>Employees last year: ",mapdata$Employees_lastyear,"<br>Change from last year: ",round(mapdata$employee_diff_percent,2),'%<br>Most recent accounts scraped: ',mapdata$enddate,'<br><strong><a href="',paste0("https://find-and-update.company-information.service.gov.uk/company/",mapdata$CompanyNumber),'">Companies House page</a>',"</strong>"),#this does NOT need to be in formula for some arbitrary reason
         group = 'firms'
-        # popup = paste0("Title", "<hr>", "Text 1", "<br>", "Text 2")) 
         ) %>%
       addLegend("topright", pal = palette, values = mapdata$Employees_thisyear,
                     title = "Employee count",
@@ -287,8 +292,6 @@ function(input, output, session) {
     
     
   }
-  
-  
   
   
   ##LEAFLET REACTIVES----
