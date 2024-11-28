@@ -6,7 +6,7 @@ library(plotly)
 library(bslib)
 library(knitr)
 # library(toOrdinal)
-# library(shinyWidgets)
+library(shinyWidgets)
 library(markdown)
 
 source('othercode/functions.R')

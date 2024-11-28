@@ -34,6 +34,11 @@ sicdigitselect_input_panel <-
   }
 
 
+toggleSwitch <- 
+  function(){
+    materialSwitch(inputId = "mapdisplayvar_switch", label = HTML("<b>Show most recent employee count OR change in employees since previous accounts</b>"), )
+  }
+
 
 # Panel layouts ----
 
@@ -78,6 +83,7 @@ fluidPage(
                              sliderInput("employee_count_range",
                                          label = "Employee count range (inclusive):",
                                          min = 0, max = 957, value = c(10,957)),
+                             toggleSwitch(),
                              htmlOutput("firm_count")#reactive displays current count of firms being shown on map    
                            ),
                            mainPanel(

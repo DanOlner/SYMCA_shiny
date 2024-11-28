@@ -21,7 +21,8 @@ if(is_installed("reactlog")){
 # ch <- readRDS('data/companieshouse_employees_n_sectors_southyorkshire.rds')
 
 #Version with SIC digit types in a single column
-ch <- readRDS('data/companieshouse_employees_n_sectors_southyorkshire_long.rds')
+ch <- readRDS('data/companieshouse_employees_n_sectors_southyorkshire_long.rds') %>%
+  select(Company,CompanyNumber,IncorporationDate,enddate,Employees_thisyear,Employees_lastyear,SIC_digit,sector_name)
 
 ch <- ch %>%
   mutate(
@@ -35,6 +36,22 @@ ch <- ch %>%
   group_by(CompanyNumber) %>% 
   filter(enddate == max(enddate)) %>% 
   ungroup()
+
+
+
+
+
+#Quick hack to check toggle switch works - 
+#Use existing col name being used, reassign that to the two display columns
+#So rename the original first
+# ch <- ch %>% 
+#   rename(employees_mostrecent = Employees_thisyear)
+
+
+#Make longer so most recent employee count and percent change are in one column so can filter on it
+#65mb before... 90mb after. Args for not just making longer the whole time! Toh it's in server memory, not being sent to client
+# chk <- ch %>%
+#   pivot_longer(cols = c(Employees_thisyear,employee_diff_percent),names_to = 'display_val', values_to = 'value')
 
 #Convert to latlon and resave
 # ch <- ch %>% st_transform("EPSG:4326")
@@ -121,6 +138,42 @@ function(input, output, session) {
   
  
   #OBSERVED EVENTS FOR THE COMPANIES HOUSE DATAFRAME----
+  
+  
+  #SWAP MAIN DISPLAY VARIABLE - EMPLOYEE COUNT VS PERCENT CHANGE SINCE LAST SUBMITTED ACCOUNTS
+  change_display_column <- reactive({
+    
+    #Just create a new column from one of the two we're using
+    #That column has a single name, which will be used to display
+    #And state of switch used to decide on legend (percent change will diverge across zero, so want different)
+    int('Toggle switch triggered.')
+    
+    df <- ch
+    
+    if(input$switch1 == TRUE){
+      
+      df <- df %>% 
+        mutate(
+          Employees_thisyear = employees_mostrecent
+          # displayvar = Employees_thisyear
+        )
+      
+    } else {
+      
+      df <- df %>% 
+        mutate(
+          Employees_thisyear = employee_diff_percent
+          # displayvar = employee_diff_percent
+        )
+      
+    }
+    
+    return(df)
+    
+  })
+  
+  
+  
   
   #What's going on with firm data filters:
   #A single reactive filter for each different selection type e.g. sector name or employee range
@@ -213,6 +266,8 @@ function(input, output, session) {
     # cat(inc(),": Final filter combination triggered....\n")
     inc("Final filter combination triggered....")
     
+    #Toggle first, to change display column
+    
     #Take the SIC digit selection, filter down further by the sector selection
     #(Those sectors are unique, but keeping modular to tie to UI elements)
     df_subset <- filter_by_SICdigit() %>% filter(
@@ -303,7 +358,7 @@ function(input, output, session) {
     inc("In draw_firms.")
     
     ct("Data going into map with this employee range: ",min(mapdata$Employees_thisyear),max(mapdata$Employees_thisyear))
-    glimpse(mapdata)
+    # glimpse(mapdata)
     
     #Clear previous circlemarkers
     leafletProxy("map") %>% clearGroup("firms")
@@ -336,7 +391,7 @@ function(input, output, session) {
         color = ~palette(Employees_thisyear),
         fillColor = ~palette(Employees_thisyear),
         opacity = 0.75,
-        popup = paste0("<strong>",mapdata$Company,"</strong><br>","Employees this year: ",mapdata$Employees_thisyear,"<br>Employees last year: ",mapdata$Employees_lastyear,"<br>Change from last year: ",round(mapdata$employee_diff_percent,2),'%<br>Most recent accounts scraped: ',mapdata$enddate,'<br><strong><a href="',paste0("https://find-and-update.company-information.service.gov.uk/company/",mapdata$CompanyNumber),'">Companies House page</a>',"</strong>"),#this does NOT need to be in formula for some arbitrary reason
+        popup = paste0("<strong>",mapdata$Company,"</strong><br>","Employees this year: ",mapdata$Employees_thisyear,"<br>Employees last year: ",mapdata$Employees_lastyear,"<br>Change from last year: ",round(mapdata$employee_diff_percent,2),"%<br>Incorporation date: ",mapdata$IncorporationDate,'<br>Most recent accounts scraped: ',mapdata$enddate,'<br><strong><a href="',paste0("https://find-and-update.company-information.service.gov.uk/company/",mapdata$CompanyNumber),'">Companies House page</a>',"</strong>"),#this does NOT need to be in formula for some arbitrary reason
         group = 'firms'
         ) %>%
       addLegend("topright", pal = palette, values = mapdata$Employees_thisyear,
