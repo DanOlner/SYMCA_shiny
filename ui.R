@@ -77,7 +77,7 @@ fluidPage(
                              sicdigitselect_input_panel(),
                              sliderInput("employee_count_range",
                                          label = "Employee count range (inclusive):",
-                                         min = 0, max = 957, value = c(11,957)),
+                                         min = 0, max = 957, value = c(10,957)),
                              htmlOutput("firm_count")#reactive displays current count of firms being shown on map    
                            ),
                            mainPanel(

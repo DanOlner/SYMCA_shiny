@@ -10,6 +10,8 @@ if(is_installed("reactlog")){
 }
 
 
+
+
 #DATA (including a little pre-processing)----
 
 
@@ -25,6 +27,14 @@ ch <- ch %>%
   mutate(
     employee_diff_percent = ((Employees_thisyear - Employees_lastyear)/Employees_lastyear) * 100
   )
+
+#Keep only most recent account date to avoid duplication
+#(Duplicates from e.g. older accounts have varying employee numbers, so combining in final filter combo gets mismatched vals compared to what's asked via employee number slider)
+#TODO: process so time series of values from multiple accounts can be displayed
+ch <- ch %>% 
+  group_by(CompanyNumber) %>% 
+  filter(enddate == max(enddate)) %>% 
+  ungroup()
 
 #Convert to latlon and resave
 # ch <- ch %>% st_transform("EPSG:4326")
@@ -120,11 +130,12 @@ function(input, output, session) {
   #Filter SIC digit type when digit dropdown changes
   filter_by_SICdigit <- reactive({
     
+    inc("Filter by SIC digit called.")
+    
+    #Filter CH data to selected SIC digit
     df <- ch %>% filter(
       SIC_digit == input$sicdigit_chosen
     )
-    
-    glimpse(df)
     
     #When SIC digit is changed, the choice of sectors needs updating in the dropdown to those in that digit
     #TODO: better defaults for sector when changing digit (one based on previous selection?)
@@ -145,6 +156,7 @@ function(input, output, session) {
     
     cat('Sector autoselected: ', newsectors[selectedsector],'\n')
     
+    #Update the sector selection to new SIC digit
     updateSelectInput(
       session,
       'sector_chosen',
@@ -152,8 +164,8 @@ function(input, output, session) {
       selected = newsectors[selectedsector]
     )
     
-    cat('df being used in SIC digit selection trigger:\n')
-    glimpse(df)
+    # cat('df being used in SIC digit selection trigger:\n')
+    # glimpse(df)
     
     return(df)
     
@@ -162,12 +174,14 @@ function(input, output, session) {
   #Filter sector when sector dropdown changes
   filter_by_sector <- reactive({
     
+    inc("Filter by sector called.")
+    
     df <- ch %>% filter(
       sector_name == input$sector_chosen
     )
     
-    cat('df being used in sector selection trigger:\n')
-    glimpse(df)
+    # cat('df being used in sector selection trigger:\n')
+    # glimpse(df)
     
     
   })
@@ -175,14 +189,18 @@ function(input, output, session) {
   #Filter sector when sector dropdown changes
   filter_by_employee <- reactive({
     
+    inc("Filter by employee (value slider) called.")
+    
+    #isolate one of them, only get triggered once
     df <- ch %>% filter(
-      between(Employees_thisyear,input$employee_count_range[1],isolate(input$employee_count_range[2]))#isolate one of them, only get triggered once
+      Employees_thisyear >= input$employee_count_range[1] & Employees_thisyear <= isolate(input$employee_count_range[2])#
+      # between(Employees_thisyear,input$employee_count_range[1],isolate(input$employee_count_range[2]))#isolate one of them, only get triggered once
     )
     
-    cat('df being used in employee range selection trigger:\n')
-    glimpse(df)
-    cat('SIC digits present:\n')
-    print(unique(df$SIC_digit))
+    ct('df being used in employee range selection trigger has this employee range:',min(df$Employees_thisyear),max(df$Employees_thisyear))
+    # glimpse(df)
+    # cat('SIC digits present:\n')
+    # print(unique(df$SIC_digit))
     
     return(df)
     
@@ -192,7 +210,8 @@ function(input, output, session) {
   #Combine different filters, retriggered if any of them changed, then invalidates leaflet proxy for redraw
   combined_filters <- reactive({
    
-    cat("Final filter combination triggered....\n")
+    # cat(inc(),": Final filter combination triggered....\n")
+    inc("Final filter combination triggered....")
     
     #Take the SIC digit selection, filter down further by the sector selection
     #(Those sectors are unique, but keeping modular to tie to UI elements)
@@ -200,8 +219,8 @@ function(input, output, session) {
       CompanyNumber %in% filter_by_sector()$CompanyNumber
     )
     
-    cat('halfway df (sic digit and sector): \n')
-    glimpse(df_subset)
+    # cat('halfway df (sic digit and sector): \n')
+    # glimpse(df_subset)
     
     
     #Then filter further by the employee band and return result
@@ -211,14 +230,31 @@ function(input, output, session) {
     # isolate(filter_by_sector()) %>% filter(
     #   CompanyNumber %in% filter_by_employee()$CompanyNumber
     
-    cat('Final filtered df including employee range: \n')
-    glimpse(df_subset)
+    # cat('Final filtered df including employee range: \n')
+    # glimpse(df_subset)
     
-    cat('component parts going into that (1) = filter_by_employee df (we just printed the subset, that should be fine): \n')
-    glimpse(isolate(filter_by_employee()))
+    # cat('component parts going into that (1) = filter_by_employee df (we just printed the subset, that should be fine): \n')
+    # glimpse(isolate(filter_by_employee()))
     
     #set count of firms to display
     reactive_values$count_of_firms <- nrow(df_subset)
+    
+    #report all employee range values here
+    ct("Filter by SIC_digit -- employee range: ", 
+       min(isolate(filter_by_SICdigit()$Employees_thisyear)),
+       max(isolate(filter_by_SICdigit()$Employees_thisyear))
+       ) 
+    ct("Filter by sector -- employee range: ", 
+       min(isolate(filter_by_sector()$Employees_thisyear)),
+       max(isolate(filter_by_sector()$Employees_thisyear))
+       ) 
+    ct("Filter by employee -- employee range: ", 
+       min(isolate(filter_by_employee()$Employees_thisyear)),
+       max(isolate(filter_by_employee()$Employees_thisyear))
+       ) 
+    
+    #Save result for inspection
+    saveRDS(df_subset, 'local/final_filtered.rds')
     
     return(df_subset)
      
@@ -231,11 +267,12 @@ function(input, output, session) {
     #combo of both sector and digit
     df <- filter_by_SICdigit() %>% filter(CompanyNumber %in% filter_by_sector()$CompanyNumber)
     
-    cat("Slider update code called. min and max employees this year:\n")
-    cat(min(df$Employees_thisyear),",",max(df$Employees_thisyear),"\n")
+    # cat(inc(),": Slider update code called. min and max employees this year:\n")
+    # cat(min(df$Employees_thisyear),",",max(df$Employees_thisyear),"\n")
+    inc(": Slider update code called. min and max employees this year: ",min(df$Employees_thisyear),",",max(df$Employees_thisyear))
     
-    cat('df being used in slider update:\n')
-    glimpse(df)
+    # cat('df being used in slider update:\n')
+    # glimpse(df)
     
     #Add ten to min value if there are firms with more than ten employees, otherwise set to zero
     mintouse <- ifelse(min(df$Employees_thisyear) + 10 < max(df$Employees_thisyear), 10, 0)
@@ -262,17 +299,33 @@ function(input, output, session) {
   #Add in the selected firms
   draw_firms <- function(mapdata){
     
+    #First cat wrapper increments counter
+    inc("In draw_firms.")
+    
+    ct("Data going into map with this employee range: ",min(mapdata$Employees_thisyear),max(mapdata$Employees_thisyear))
+    glimpse(mapdata)
+    
     #Clear previous circlemarkers
     leafletProxy("map") %>% clearGroup("firms")
     leafletProxy("map") %>% clearControls()#clear legend before new one drawn
     
-    # palette <- colorNumeric(palette = "BrBG", domain = mapdata$Employees_thisyear, na.color="transparent")
-    
     #Own-made bins using classInt
     #TODO: fix breaks when only single firms showing up (I think is the problem)
-    fisher_breaks <- classInt::classIntervals(mapdata$Employees_thisyear, n = 7, style = "fisher")$brks
     
-    palette <- colorBin(palette = "RdBu", bins = fisher_breaks, domain = ch.manuf$Employees_thisyear)
+    #Look at manuf, the default df being used on startup
+    #Up to 60, there's every value
+    #ch.manuf %>% st_set_geometry(NULL) %>% select(Employees_thisyear) %>% arrange(Employees_thisyear) %>% distinct() %>% View
+    
+    #This is just a cat wrapper that adds line break (so can be same inputs as inc)
+    ct("Making legend bins. Min max employee count here: ", min(mapdata$Employees_thisyear),max(mapdata$Employees_thisyear))
+    
+    fisher_breaks <- classInt::classIntervals(mapdata$Employees_thisyear, n = 7, style = "fisher", dataPrecision = T)$brks %>% round
+    
+    ct("Fisher breaks made (including rounding): ", min(mapdata$Employees_thisyear),max(mapdata$Employees_thisyear))
+     
+    ct("Current slider vals: ",isolate(input$employee_count_range))
+    
+    palette <- colorBin(palette = "RdBu", bins = fisher_breaks, domain = ch.manuf$Employees_thisyear, right = T)
     
     
     leafletProxy('map') %>%
@@ -282,6 +335,7 @@ function(input, output, session) {
         radius = ~ scales::rescale(Employees_thisyear, c(1,50)),
         color = ~palette(Employees_thisyear),
         fillColor = ~palette(Employees_thisyear),
+        opacity = 0.75,
         popup = paste0("<strong>",mapdata$Company,"</strong><br>","Employees this year: ",mapdata$Employees_thisyear,"<br>Employees last year: ",mapdata$Employees_lastyear,"<br>Change from last year: ",round(mapdata$employee_diff_percent,2),'%<br>Most recent accounts scraped: ',mapdata$enddate,'<br><strong><a href="',paste0("https://find-and-update.company-information.service.gov.uk/company/",mapdata$CompanyNumber),'">Companies House page</a>',"</strong>"),#this does NOT need to be in formula for some arbitrary reason
         group = 'firms'
         ) %>%
@@ -300,7 +354,7 @@ function(input, output, session) {
   #See https://rstudio.github.io/leaflet/shiny.html
   output$map <- renderLeaflet({
     
-    cat('Output map initial leaflet render.\n')
+    inc('Output map initial leaflet render.')
     
     
     #Only static elements, observe below will do the dynamics
@@ -327,7 +381,7 @@ function(input, output, session) {
   #Add initial dynamic elements
   observe({
     
-    cat("Leaflet proxy call.\n")
+    inc("Leaflet proxy call.")
     
     #Change map when variable changed
     #See https://rstudio.github.io/leaflet/shiny.html -

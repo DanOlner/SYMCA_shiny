@@ -9,4 +9,4 @@ library(knitr)
 # library(shinyWidgets)
 library(markdown)
 
-# source('small_functions.R')
+source('othercode/functions.R')
