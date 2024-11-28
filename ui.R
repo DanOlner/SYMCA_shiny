@@ -34,6 +34,11 @@ sicdigitselect_input_panel <-
   }
 
 
+toggleSwitch <- 
+  function(){
+    materialSwitch(inputId = "mapdisplayvar_switch", label = HTML("<b>Show most recent employee count OR change in employees since previous accounts</b>"),value = TRUE)
+  }
+
 
 # Panel layouts ----
 
@@ -63,33 +68,34 @@ summary_panel <-
 # Site layout ----
 
 fluidPage(
-
-    titlePanel("South Yorkshire Companies House map"),
-
-    # Output: Tabset w/ plot, summary, and table ----
-    tabsetPanel(type = "tabs",
-                
-                tabPanel("Map", 
-                         sidebarLayout(
-                           sidebarPanel(
-                             h4(strong("Explore sectors")),
-                             sectorselect_input_panel(),
-                             sicdigitselect_input_panel(),
-                             sliderInput("employee_count_range",
-                                         label = "Employee count range (inclusive):",
-                                         min = 0, max = 957, value = c(10,957)),
-                             htmlOutput("firm_count")#reactive displays current count of firms being shown on map    
-                           ),
-                           mainPanel(
-                             leafletOutput("map", height = 1000))
-                         ) 
-                ),
-                
-                summary_panel('Analytics'),
-                
-                about_tab_panel('About')
-                
-    )                
-    
-
+  
+  titlePanel("South Yorkshire Companies House map"),
+  
+  # Output: Tabset w/ plot, summary, and table ----
+  tabsetPanel(type = "tabs",
+              
+              tabPanel("Map", 
+                       sidebarLayout(
+                         sidebarPanel(
+                           h4(strong("Explore sectors")),
+                           sectorselect_input_panel(),
+                           sicdigitselect_input_panel(),
+                           sliderInput("employee_count_range",
+                                       label = "Employee count range (inclusive):",
+                                       min = 0, max = 957, value = c(10,957)),
+                           toggleSwitch(),
+                           htmlOutput("firm_count")#reactive displays current count of firms being shown on map    
+                         ),
+                         mainPanel(
+                           leafletOutput("map", height = 1000))
+                       ) 
+              ),
+              
+              summary_panel('Analytics'),
+              
+              about_tab_panel('About')
+              
+  )                
+  
+  
 )

@@ -21,7 +21,8 @@ if(is_installed("reactlog")){
 # ch <- readRDS('data/companieshouse_employees_n_sectors_southyorkshire.rds')
 
 #Version with SIC digit types in a single column
-ch <- readRDS('data/companieshouse_employees_n_sectors_southyorkshire_long.rds')
+ch <- readRDS('data/companieshouse_employees_n_sectors_southyorkshire_long.rds') %>%
+  select(Company,CompanyNumber,IncorporationDate,enddate,Employees_thisyear,Employees_lastyear,SIC_digit,sector_name)
 
 ch <- ch %>%
   mutate(
@@ -35,6 +36,26 @@ ch <- ch %>%
   group_by(CompanyNumber) %>% 
   filter(enddate == max(enddate)) %>% 
   ungroup()
+
+
+
+
+
+#Quick hack to check toggle switch works - 
+#Use existing col name being used, reassign that to the two display columns
+#So rename the original first
+#Mutate: 1 - copy employees_thisyear into new col employees_mostrecent
+#We'll then use "Employees_thisyear" as the stand in "variable column" to overwrite
+ch <- ch %>%
+  mutate(
+    employees_mostrecent = Employees_thisyear
+  )
+
+
+#Make longer so most recent employee count and percent change are in one column so can filter on it
+#65mb before... 90mb after. Args for not just making longer the whole time! Toh it's in server memory, not being sent to client
+# chk <- ch %>%
+#   pivot_longer(cols = c(Employees_thisyear,employee_diff_percent),names_to = 'display_val', values_to = 'value')
 
 #Convert to latlon and resave
 # ch <- ch %>% st_transform("EPSG:4326")
@@ -106,6 +127,7 @@ selectedSIClevel <- 1
 
 reactive_values <- 
   reactiveValues(
+    ch = ch,#put the dataframe in a reactive context so other reactives can see it
     count_of_firms = 0
   )
 
@@ -118,9 +140,55 @@ function(input, output, session) {
   
   output$firm_count <- renderUI(HTML(paste0("Number of firms displayed: <strong>", reactive_values$count_of_firms, "</strong>")))
   
-  
- 
   #OBSERVED EVENTS FOR THE COMPANIES HOUSE DATAFRAME----
+  
+  
+  #SWAP MAIN DISPLAY VARIABLE - EMPLOYEE COUNT VS PERCENT CHANGE SINCE LAST SUBMITTED ACCOUNTS
+  #Doing as reactive so can control order - this needs to happen before subsequent filters
+  change_display_column <- reactive({
+    
+    #Just create a new column from one of the two we're using
+    #That column has a single name, which will be used to display
+    #And state of switch used to decide on legend (percent change will diverge across zero, so want different)
+    inc('Toggle switch triggered.')
+    ct("Current val: ",isolate(input$mapdisplayvar_switch))
+    
+    if(input$mapdisplayvar_switch == TRUE){
+      
+      #Use global / non reactive ch because we need to filter down (and back) from firms with two values for employee count
+      reactive_values$ch <- ch %>% 
+        mutate(
+          Employees_thisyear = employees_mostrecent
+          # displayvar = Employees_thisyear
+        )
+      
+      #FALSE changes to percent diff - need to filter down to only firms with employee vals for both timepoints
+      #TODO: add note to site saying that for % change, min employees last year is 5 or more
+      
+    } else {
+      
+      reactive_values$ch <- ch %>% 
+        filter(
+          !is.na(Employees_lastyear),
+          Employees_lastyear > 4
+          ) %>% 
+        mutate(
+          Employees_thisyear = employee_diff_percent
+          # displayvar = employee_diff_percent
+        )
+      
+    }
+    
+    ct("Current state of ch:")
+    glimpse(reactive_values$ch)
+    
+    #Just return switch val to indicate has run
+    return(isolate(input$mapdisplayvar_switch))
+    
+  })
+  
+  
+  
   
   #What's going on with firm data filters:
   #A single reactive filter for each different selection type e.g. sector name or employee range
@@ -133,7 +201,7 @@ function(input, output, session) {
     inc("Filter by SIC digit called.")
     
     #Filter CH data to selected SIC digit
-    df <- ch %>% filter(
+    df <- reactive_values$ch %>% filter(
       SIC_digit == input$sicdigit_chosen
     )
     
@@ -176,7 +244,7 @@ function(input, output, session) {
     
     inc("Filter by sector called.")
     
-    df <- ch %>% filter(
+    df <- reactive_values$ch %>% filter(
       sector_name == input$sector_chosen
     )
     
@@ -192,12 +260,12 @@ function(input, output, session) {
     inc("Filter by employee (value slider) called.")
     
     #isolate one of them, only get triggered once
-    df <- ch %>% filter(
-      Employees_thisyear >= input$employee_count_range[1] & Employees_thisyear <= isolate(input$employee_count_range[2])#
-      # between(Employees_thisyear,input$employee_count_range[1],isolate(input$employee_count_range[2]))#isolate one of them, only get triggered once
+    df <- reactive_values$ch %>% filter(
+      employees_mostrecent >= input$employee_count_range[1] & employees_mostrecent <= isolate(input$employee_count_range[2])
+      # Employees_thisyear >= input$employee_count_range[1] & Employees_thisyear <= isolate(input$employee_count_range[2])
     )
     
-    ct('df being used in employee range selection trigger has this employee range:',min(df$Employees_thisyear),max(df$Employees_thisyear))
+    ct('df being used in employee range selection trigger has this employee range:',min(df$employees_mostrecent),max(df$employees_mostrecent))
     # glimpse(df)
     # cat('SIC digits present:\n')
     # print(unique(df$SIC_digit))
@@ -209,9 +277,14 @@ function(input, output, session) {
   
   #Combine different filters, retriggered if any of them changed, then invalidates leaflet proxy for redraw
   combined_filters <- reactive({
-   
+    
     # cat(inc(),": Final filter combination triggered....\n")
     inc("Final filter combination triggered....")
+    
+    #Toggle first, to change display column
+    #This will change the global ch dataframe, so don't need to do anything else here directly
+    #It'll get picked up in the filters next
+    ct("Setting current display column in ch dataframe INSIDE COMBINED_FILTERS, state is: ",change_display_column())
     
     #Take the SIC digit selection, filter down further by the sector selection
     #(Those sectors are unique, but keeping modular to tie to UI elements)
@@ -226,7 +299,7 @@ function(input, output, session) {
     #Then filter further by the employee band and return result
     df_subset <- df_subset %>% filter(
       CompanyNumber %in% filter_by_employee()$CompanyNumber
-      )
+    )
     # isolate(filter_by_sector()) %>% filter(
     #   CompanyNumber %in% filter_by_employee()$CompanyNumber
     
@@ -240,24 +313,24 @@ function(input, output, session) {
     reactive_values$count_of_firms <- nrow(df_subset)
     
     #report all employee range values here
-    ct("Filter by SIC_digit -- employee range: ", 
-       min(isolate(filter_by_SICdigit()$Employees_thisyear)),
-       max(isolate(filter_by_SICdigit()$Employees_thisyear))
-       ) 
-    ct("Filter by sector -- employee range: ", 
-       min(isolate(filter_by_sector()$Employees_thisyear)),
-       max(isolate(filter_by_sector()$Employees_thisyear))
-       ) 
-    ct("Filter by employee -- employee range: ", 
-       min(isolate(filter_by_employee()$Employees_thisyear)),
-       max(isolate(filter_by_employee()$Employees_thisyear))
-       ) 
+    # ct("Filter by SIC_digit -- employee range: ", 
+    #    min(isolate(filter_by_SICdigit()$Employees_thisyear)),
+    #    max(isolate(filter_by_SICdigit()$Employees_thisyear))
+    # ) 
+    # ct("Filter by sector -- employee range: ", 
+    #    min(isolate(filter_by_sector()$Employees_thisyear)),
+    #    max(isolate(filter_by_sector()$Employees_thisyear))
+    # ) 
+    # ct("Filter by employee -- employee range: ", 
+    #    min(isolate(filter_by_employee()$Employees_thisyear)),
+    #    max(isolate(filter_by_employee()$Employees_thisyear))
+    # ) 
     
     #Save result for inspection
-    saveRDS(df_subset, 'local/final_filtered.rds')
+    # saveRDS(df_subset, 'local/final_filtered.rds')
     
     return(df_subset)
-     
+    
   })
   
   
@@ -269,22 +342,22 @@ function(input, output, session) {
     
     # cat(inc(),": Slider update code called. min and max employees this year:\n")
     # cat(min(df$Employees_thisyear),",",max(df$Employees_thisyear),"\n")
-    inc(": Slider update code called. min and max employees this year: ",min(df$Employees_thisyear),",",max(df$Employees_thisyear))
+    inc(": Slider update code called. min and max employees this year: ",min(df$employees_mostrecent),",",max(df$employees_mostrecent))
     
     # cat('df being used in slider update:\n')
     # glimpse(df)
     
     #Add ten to min value if there are firms with more than ten employees, otherwise set to zero
-    mintouse <- ifelse(min(df$Employees_thisyear) + 10 < max(df$Employees_thisyear), 10, 0)
+    mintouse <- ifelse(min(df$employees_mostrecent) + 10 < max(df$employees_mostrecent), 10, 0)
     
     #Update slideer range for selected sector
     updateSliderInput(session, "employee_count_range",
-                      value = c(mintouse, max(df$Employees_thisyear)),
+                      value = c(mintouse, max(df$employees_mostrecent)),
                       min = 0,
-                      max = max(df$Employees_thisyear),
+                      max = max(df$employees_mostrecent),
                       step = 1
     )
-     
+    
     cat("range bar: ", isolate(input$employee_count_range),"\n")
     
   })
@@ -302,8 +375,13 @@ function(input, output, session) {
     #First cat wrapper increments counter
     inc("In draw_firms.")
     
-    ct("Data going into map with this employee range: ",min(mapdata$Employees_thisyear),max(mapdata$Employees_thisyear))
-    glimpse(mapdata)
+    ct("Data going into map with this range: ",min(mapdata$Employees_thisyear),max(mapdata$Employees_thisyear))
+    # glimpse(mapdata)
+    
+    ct("Has main df changed via toggle? Looks like this in draw_firms:")
+    # glimpse(ch)
+    
+    
     
     #Clear previous circlemarkers
     leafletProxy("map") %>% clearGroup("firms")
@@ -317,31 +395,36 @@ function(input, output, session) {
     #ch.manuf %>% st_set_geometry(NULL) %>% select(Employees_thisyear) %>% arrange(Employees_thisyear) %>% distinct() %>% View
     
     #This is just a cat wrapper that adds line break (so can be same inputs as inc)
-    ct("Making legend bins. Min max employee count here: ", min(mapdata$Employees_thisyear),max(mapdata$Employees_thisyear))
+    # ct("Making legend bins. Min max employee count here: ", min(mapdata$Employees_thisyear),max(mapdata$Employees_thisyear))
     
-    fisher_breaks <- classInt::classIntervals(mapdata$Employees_thisyear, n = 7, style = "fisher", dataPrecision = T)$brks %>% round
+    #MAKE LEGEND, DIFFERENT ONE FOR EACH VARIABLE TYPE
+   
+    # debugonce(returnpalette)
+    # ct("Toggle state prior to palette function call: ", isolate(change_display_column()))
     
-    ct("Fisher breaks made (including rounding): ", min(mapdata$Employees_thisyear),max(mapdata$Employees_thisyear))
-     
-    ct("Current slider vals: ",isolate(input$employee_count_range))
+    palette <- returnpalette(mapdata$Employees_thisyear, isolate(change_display_column()), n = 2)
     
-    palette <- colorBin(palette = "RdBu", bins = fisher_breaks, domain = ch.manuf$Employees_thisyear, right = T)
-    
+    #change colour for polarity of % change
+    percenttext <- ifelse(
+      mapdata$employee_diff_percent >0, 
+      paste0('<span style="color: #64eb34">',round(mapdata$employee_diff_percent,2),'%</span>'),
+      paste0('<span style="color: #eb3434">',round(mapdata$employee_diff_percent,2),'%</span>')
+      )
     
     leafletProxy('map') %>%
       addCircleMarkers(
         data = mapdata,
         label = ~Company,#label will be the marker hover
-        radius = ~ scales::rescale(Employees_thisyear, c(1,50)),
+        radius = ~ scales::rescale(Employees_thisyear, c(1, ifelse(isolate(change_display_column()),50,30))),#smaller circles if change
         color = ~palette(Employees_thisyear),
         fillColor = ~palette(Employees_thisyear),
         opacity = 0.75,
-        popup = paste0("<strong>",mapdata$Company,"</strong><br>","Employees this year: ",mapdata$Employees_thisyear,"<br>Employees last year: ",mapdata$Employees_lastyear,"<br>Change from last year: ",round(mapdata$employee_diff_percent,2),'%<br>Most recent accounts scraped: ',mapdata$enddate,'<br><strong><a href="',paste0("https://find-and-update.company-information.service.gov.uk/company/",mapdata$CompanyNumber),'">Companies House page</a>',"</strong>"),#this does NOT need to be in formula for some arbitrary reason
+        popup = paste0("<strong>",mapdata$Company,"</strong><br>","Employees this year: ",mapdata$employees_mostrecent,"<br>Employees last year: ",mapdata$Employees_lastyear,"<br>Change from last year: ",percenttext,"<br>Incorporation date: ",mapdata$IncorporationDate,'<br>Most recent accounts scraped: ',mapdata$enddate,'<br><strong><a href="',paste0("https://find-and-update.company-information.service.gov.uk/company/",mapdata$CompanyNumber),'">Companies House page</a>',"</strong>"),#this does NOT need to be in formula for some arbitrary reason
         group = 'firms'
-        ) %>%
+      ) %>%
       addLegend("topright", pal = palette, values = mapdata$Employees_thisyear,
-                    title = "Employee count",
-                    opacity = 1) %>%
+                title = ifelse(isolate(change_display_column()),"Employee count","% change employees"),
+                opacity = 1) %>%
       addScaleBar("topleft")
     
     
@@ -401,5 +484,5 @@ function(input, output, session) {
     draw_firms(combined_filters())
     
   })
-
+  
 }#END MAIN INPUT OUTPUT SESSION FUNCTION
