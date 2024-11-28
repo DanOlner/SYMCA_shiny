@@ -402,7 +402,7 @@ function(input, output, session) {
     # debugonce(returnpalette)
     # ct("Toggle state prior to palette function call: ", isolate(change_display_column()))
     
-    palette <- returnpalette(mapdata$Employees_thisyear, isolate(change_display_column()), n = 2)
+    palette <- returnpalette(mapdata$Employees_thisyear, isolate(change_display_column()), n = 7)
     
     #change colour for polarity of % change
     percenttext <- ifelse(
