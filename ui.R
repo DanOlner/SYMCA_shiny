@@ -18,7 +18,8 @@ sectorselect_input_panel <-
       label = 'Select sector from dropdown or begin inputting its name below:',
       choices = sectors,
       selected = default_sector,
-      selectize = T
+      selectize = T,
+      
     )
   }
 
@@ -26,7 +27,7 @@ sicdigitselect_input_panel <-
   function(){
     selectInput(
       inputId = 'sicdigit_chosen',
-      label = 'Select SIC digit level (Section to 5 digit)',
+      label = 'Select SIC digit level (Section to 5 digit) [disabled]',
       choices = readRDS('data/initialSICDigitNames.rds'),
       selected = default_digit,
       selectize = T
@@ -69,6 +70,8 @@ summary_panel <-
 
 fluidPage(
   
+  useShinyjs(),
+  
   titlePanel("South Yorkshire Companies House map"),
   
   # Output: Tabset w/ plot, summary, and table ----
@@ -84,6 +87,7 @@ fluidPage(
                                        label = "Employee count range (inclusive):",
                                        min = 0, max = 957, value = c(10,957)),
                            toggleSwitch(),
+                           # uiOutput("mapdisplayvar_switch")#placeholder, will create toggle switch in server
                            htmlOutput("firm_count")#reactive displays current count of firms being shown on map    
                          ),
                          mainPanel(
