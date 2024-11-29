@@ -297,14 +297,10 @@ function(input, output, session) {
     #Own-made bins using classInt
     #TODO: fix breaks when only single firms showing up (I think is the problem)
     
-    #Look at manuf, the default df being used on startup
-    #Up to 60, there's every value
-    #ch.manuf %>% st_set_geometry(NULL) %>% select(Employees_thisyear) %>% arrange(Employees_thisyear) %>% distinct() %>% View
-    
     #This is just a cat wrapper that adds line break (so can be same inputs as inc)
     # ct("Making legend bins. Min max employee count here: ", min(mapdata$Employees_thisyear),max(mapdata$Employees_thisyear))
     
-    #MAKE LEGEND, DIFFERENT ONE FOR EACH VARIABLE TYPE
+    #MAKE LEGEND, DIFFERENT ONE FOR EACH VARIABLE TYPE AS PERCENT DIFF IS NEG AND POS AND WANT NICE BREAK AT ZERO
    
     # debugonce(returnpalette)
     # ct("Toggle state prior to palette function call: ", isolate(change_display_column()))
@@ -319,7 +315,6 @@ function(input, output, session) {
       )
     
     #Change shape of data so middling sized points are more prominent
-    #Nice little "do for neg numbers too even tho makes no math sense" line from https://stackoverflow.com/a/64191142/5023561
     if(isolate(input$mapdisplayvar_switch)){
       
       mapdata <- mapdata %>%
@@ -331,18 +326,11 @@ function(input, output, session) {
       
       mapdata <- mapdata %>%
         mutate(
+          #Nice little "do for neg numbers too even tho makes no math sense" line from https://stackoverflow.com/a/64191142/5023561
           tweaked_markersizevalue = sign(Employees_thisyear) * abs(Employees_thisyear)^(1 / 2)
             )
 
     }
-    
-    # mapdata <- mapdata %>%
-    #   mutate(
-    #     tweaked_markersizevalue = if(isolate(input$mapdisplayvar_switch)){#TRUE is employee count, FALSE is % diff
-    #       sqrt(Employees_thisyear)} else {
-    #       sign(Employees_thisyear) * abs(Employees_thisyear)^(1 / 2)
-    #         }
-    #       )
     
     glimpse(mapdata)
     
