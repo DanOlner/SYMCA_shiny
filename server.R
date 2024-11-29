@@ -224,13 +224,14 @@ function(input, output, session) {
     
     cat('Sector autoselected: ', newsectors[selectedsector],'\n')
     
+    
     #Update the sector selection to new SIC digit
-    updateSelectInput(
-      session,
-      'sector_chosen',
-      choices = newsectors,
-      selected = newsectors[selectedsector]
-    )
+      updateSelectInput(
+        session,
+        'sector_chosen',
+        choices = newsectors,
+        selected = newsectors[selectedsector]
+      )
     
     # cat('df being used in SIC digit selection trigger:\n')
     # glimpse(df)
@@ -284,7 +285,7 @@ function(input, output, session) {
     #Toggle first, to change display column
     #This will change the global ch dataframe, so don't need to do anything else here directly
     #It'll get picked up in the filters next
-    ct("Setting current display column in ch dataframe INSIDE COMBINED_FILTERS, state is: ",change_display_column())
+    ct("Setting current display column in ch dataframe INSIDE COMBINED_FILTERS, state is: ", change_display_column())
     
     #Take the SIC digit selection, filter down further by the sector selection
     #(Those sectors are unique, but keeping modular to tie to UI elements)
@@ -342,7 +343,7 @@ function(input, output, session) {
     
     # cat(inc(),": Slider update code called. min and max employees this year:\n")
     # cat(min(df$Employees_thisyear),",",max(df$Employees_thisyear),"\n")
-    inc(": Slider update code called. min and max employees this year: ",min(df$employees_mostrecent),",",max(df$employees_mostrecent))
+    inc(": 'Slider update values after sector/digit change' called. min and max employees this year: ",min(df$employees_mostrecent),",",max(df$employees_mostrecent))
     
     # cat('df being used in slider update:\n')
     # glimpse(df)
@@ -351,6 +352,7 @@ function(input, output, session) {
     mintouse <- ifelse(min(df$employees_mostrecent) + 10 < max(df$employees_mostrecent), 10, 0)
     
     #Update slideer range for selected sector
+    
     updateSliderInput(session, "employee_count_range",
                       value = c(mintouse, max(df$employees_mostrecent)),
                       min = 0,
@@ -450,7 +452,6 @@ function(input, output, session) {
     
     inc('Output map initial leaflet render.')
     
-    
     #Only static elements, observe below will do the dynamics
     #Set zoom fractional jumps for a bit more zoom control
     #https://stackoverflow.com/a/62863122/5023561
@@ -492,6 +493,8 @@ function(input, output, session) {
         # group = "sy_outline"
       ) 
     
+    #Drawfirms is just a function, so reactive-wise, just part of this observe.
+    #A change in combined_filters() invalidates this observe.
     draw_firms(combined_filters())
     
   })
