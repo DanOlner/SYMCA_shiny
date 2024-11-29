@@ -144,202 +144,55 @@ function(input, output, session) {
   
   #OBSERVED EVENTS FOR THE COMPANIES HOUSE DATAFRAME----
   
-  
-  #SWAP MAIN DISPLAY VARIABLE - EMPLOYEE COUNT VS PERCENT CHANGE SINCE LAST SUBMITTED ACCOUNTS
-  #Doing as reactive so can control order - this needs to happen before subsequent filters
-  # change_display_column <- reactive({
+  #Filter SIC digit type when digit dropdown changes
+  # filter_by_SICdigit <- reactive({
   #   
-  #   #Just create a new column from one of the two we're using
-  #   #That column has a single name, which will be used to display
-  #   #And state of switch used to decide on legend (percent change will diverge across zero, so want different)
-  #   inc('Toggle switch triggered.')
-  #   ct("Current val: ",isolate(input$mapdisplayvar_switch))
+  #   inc("Filter by SIC digit called.")
   #   
-  #   if(input$mapdisplayvar_switch == TRUE){
-  #     
-  #     #Use global / non reactive ch because we need to filter down (and back) from firms with two values for employee count
-  #     reactive_values$ch <- ch %>% 
-  #       mutate(
-  #         Employees_thisyear = employees_mostrecent
-  #         # displayvar = Employees_thisyear
-  #       )
-  #     
-  #     #FALSE changes to percent diff - need to filter down to only firms with employee vals for both timepoints
-  #     #TODO: add note to site saying that for % change, min employees last year is 5 or more
-  #     
-  #   } else {
-  #     
-  #     reactive_values$ch <- ch %>% 
-  #       filter(
-  #         !is.na(Employees_lastyear),
-  #         Employees_lastyear > 4
-  #         ) %>% 
-  #       mutate(
-  #         Employees_thisyear = employee_diff_percent
-  #         # displayvar = employee_diff_percent
-  #       )
-  #     
+  #   #Filter CH data to selected SIC digit
+  #   df <- reactive_values$ch %>% filter(
+  #     SIC_digit == input$sicdigit_chosen
+  #   )
+  #   
+  #   #When SIC digit is changed, the choice of sectors needs updating in the dropdown to those in that digit
+  #   #TODO: better defaults for sector when changing digit (one based on previous selection?)
+  #   
+  #   newsectors <- SIClookup_long %>% filter(SIC_digit == isolate(input$sicdigit_chosen)) %>% select(sector_name) %>% pull %>% unique
+  #   # newsectors <- unique(df$sector_name)
+  #   
+  #   # cat("New sectors: ", newsectors,"\n")
+  #   
+  #   # selectedsector = 64
+  #   
+  #   #quick hack to check issue
+  #   if(isolate(input$sicdigit_chosen) == "Section") {
+  #     selectedsector = 3}
+  #   else if (isolate(input$sicdigit_chosen) == "2 digit") {
+  #     selectedsector = 64
   #   }
   #   
-  #   ct("Current state of ch:")
-  #   glimpse(reactive_values$ch)
-  #   
-  #   #Just return switch val to indicate has run
-  #   return(isolate(input$mapdisplayvar_switch))
-  #   
-  # })
-  # 
-  
-  
-  
-  #What's going on with firm data filters:
-  #A single reactive filter for each different selection type e.g. sector name or employee range
-  #A single reactive filter that combines all those
-  #That last reactive filter is the one that leaflet proxy reactive knows about
-  
-  #Filter SIC digit type when digit dropdown changes
-  filter_by_SICdigit <- reactive({
-    
-    inc("Filter by SIC digit called.")
-    
-    #Filter CH data to selected SIC digit
-    df <- reactive_values$ch %>% filter(
-      SIC_digit == input$sicdigit_chosen
-    )
-    
-    #When SIC digit is changed, the choice of sectors needs updating in the dropdown to those in that digit
-    #TODO: better defaults for sector when changing digit (one based on previous selection?)
-    
-    newsectors <- SIClookup_long %>% filter(SIC_digit == isolate(input$sicdigit_chosen)) %>% select(sector_name) %>% pull %>% unique
-    # newsectors <- unique(df$sector_name)
-    
-    # cat("New sectors: ", newsectors,"\n")
-    
-    # selectedsector = 64
-    
-    #quick hack to check issue
-    if(isolate(input$sicdigit_chosen) == "Section") {
-      selectedsector = 3}
-    else if (isolate(input$sicdigit_chosen) == "2 digit") {
-      selectedsector = 64
-    }
-    
-    cat('Sector autoselected: ', newsectors[selectedsector],'\n')
-    
-    
-    #Update the sector selection to new SIC digit
-      updateSelectInput(
-        session,
-        'sector_chosen',
-        choices = newsectors,
-        selected = newsectors[selectedsector]
-      )
-    
-    # cat('df being used in SIC digit selection trigger:\n')
-    # glimpse(df)
-    
-    return(df)
-    
-  })
-  
-  #Filter sector when sector dropdown changes
-  filter_by_sector <- reactive({
-    
-    inc("Filter by sector called.")
-    
-    df <- reactive_values$ch %>% filter(
-      sector_name == input$sector_chosen
-    )
-    
-    # cat('df being used in sector selection trigger:\n')
-    # glimpse(df)
-    
-    
-  })
-  
-  #Filter sector when sector dropdown changes
-  filter_by_employee <- reactive({
-    
-    inc("Filter by employee (value slider) called.")
-    
-    #isolate one of them, only get triggered once
-    df <- reactive_values$ch %>% filter(
-      employees_mostrecent >= input$employee_count_range[1] & employees_mostrecent <= isolate(input$employee_count_range[2])
-      # Employees_thisyear >= input$employee_count_range[1] & Employees_thisyear <= isolate(input$employee_count_range[2])
-    )
-    
-    ct('df being used in employee range selection trigger has this employee range:',min(df$employees_mostrecent),max(df$employees_mostrecent))
-    # glimpse(df)
-    # cat('SIC digits present:\n')
-    # print(unique(df$SIC_digit))
-    
-    return(df)
-    
-  })
-  
-  
-  #Combine different filters, retriggered if any of them changed, then invalidates leaflet proxy for redraw
-  # combined_filters <- reactive({
-  #   
-  #   # cat(inc(),": Final filter combination triggered....\n")
-  #   inc("Final filter combination triggered....")
-  #   
-  #   #Toggle first, to change display column
-  #   #This will change the global ch dataframe, so don't need to do anything else here directly
-  #   #It'll get picked up in the filters next
-  #   ct("Setting current display column in ch dataframe INSIDE COMBINED_FILTERS, state is: ", change_display_column())
-  #   
-  #   #Take the SIC digit selection, filter down further by the sector selection
-  #   #(Those sectors are unique, but keeping modular to tie to UI elements)
-  #   df_subset <- filter_by_SICdigit() %>% filter(
-  #     CompanyNumber %in% filter_by_sector()$CompanyNumber
-  #   )
-  #   
-  #   # cat('halfway df (sic digit and sector): \n')
-  #   # glimpse(df_subset)
+  #   cat('Sector autoselected: ', newsectors[selectedsector],'\n')
   #   
   #   
-  #   #Then filter further by the employee band and return result
-  #   df_subset <- df_subset %>% filter(
-  #     CompanyNumber %in% filter_by_employee()$CompanyNumber
-  #   )
-  #   # isolate(filter_by_sector()) %>% filter(
-  #   #   CompanyNumber %in% filter_by_employee()$CompanyNumber
+  #   #Update the sector selection to new SIC digit
+  #     updateSelectInput(
+  #       session,
+  #       'sector_chosen',
+  #       choices = newsectors,
+  #       selected = newsectors[selectedsector]
+  #     )
   #   
-  #   # cat('Final filtered df including employee range: \n')
-  #   # glimpse(df_subset)
+  #   # cat('df being used in SIC digit selection trigger:\n')
+  #   # glimpse(df)
   #   
-  #   # cat('component parts going into that (1) = filter_by_employee df (we just printed the subset, that should be fine): \n')
-  #   # glimpse(isolate(filter_by_employee()))
-  #   
-  #   #set count of firms to display
-  #   reactive_values$count_of_firms <- nrow(df_subset)
-  #   
-  #   #report all employee range values here
-  #   # ct("Filter by SIC_digit -- employee range: ", 
-  #   #    min(isolate(filter_by_SICdigit()$Employees_thisyear)),
-  #   #    max(isolate(filter_by_SICdigit()$Employees_thisyear))
-  #   # ) 
-  #   # ct("Filter by sector -- employee range: ", 
-  #   #    min(isolate(filter_by_sector()$Employees_thisyear)),
-  #   #    max(isolate(filter_by_sector()$Employees_thisyear))
-  #   # ) 
-  #   # ct("Filter by employee -- employee range: ", 
-  #   #    min(isolate(filter_by_employee()$Employees_thisyear)),
-  #   #    max(isolate(filter_by_employee()$Employees_thisyear))
-  #   # ) 
-  #   
-  #   #Save result for inspection
-  #   # saveRDS(df_subset, 'local/final_filtered.rds')
-  #   
-  #   return(df_subset)
+  #   return(df)
   #   
   # })
-
   
   
-  
-  
+ 
+  #MAIN REACTIVE WHERE EACH INPUT FROM UI HAS DEPENDENCY
+  #Some other observers needed for e.g. resetting employee range when sector or SIC digit changes
   combined_filters <- reactive({
     
     if(input$mapdisplayvar_switch == TRUE){
@@ -427,6 +280,8 @@ function(input, output, session) {
     #First cat wrapper increments counter
     inc("In draw_firms.")
     
+    ct("It's this code that's running, right???")
+    
     ct("Data going into map with this range: ",min(mapdata$Employees_thisyear),max(mapdata$Employees_thisyear))
     # glimpse(mapdata)
     
@@ -465,20 +320,37 @@ function(input, output, session) {
     
     #Change shape of data so middling sized points are more prominent
     #Nice little "do for neg numbers too even tho makes no math sense" line from https://stackoverflow.com/a/64191142/5023561
-    # mapdata <- mapdata %>% 
+    if(isolate(input$mapdisplayvar_switch)){
+      
+      mapdata <- mapdata %>%
+        mutate(
+          tweaked_markersizevalue = sqrt(Employees_thisyear)
+            )
+      
+    } else {
+      
+      mapdata <- mapdata %>%
+        mutate(
+          tweaked_markersizevalue = sign(Employees_thisyear) * abs(Employees_thisyear)^(1 / 2)
+            )
+
+    }
+    
+    # mapdata <- mapdata %>%
     #   mutate(
-    #     tweaked_markersizevalue = ifelse(
-    #       isolate(change_display_column()),#TRUE is employee count, FALSE is % diff
-    #       sqrt(Employees_thisyear),
+    #     tweaked_markersizevalue = if(isolate(input$mapdisplayvar_switch)){#TRUE is employee count, FALSE is % diff
+    #       sqrt(Employees_thisyear)} else {
     #       sign(Employees_thisyear) * abs(Employees_thisyear)^(1 / 2)
-    #     )
-    #   )
+    #         }
+    #       )
+    
+    glimpse(mapdata)
     
     leafletProxy('map') %>%
       addCircleMarkers(
         data = mapdata,
         label = ~Company,#label will be the marker hover
-        radius = ~ scales::rescale( Employees_thisyear , c(1, ifelse(isolate(input$mapdisplayvar_switch),50,30))),#smaller circles if change
+        radius = ~ scales::rescale( tweaked_markersizevalue , c(1, ifelse(isolate(input$mapdisplayvar_switch),50,30))),#smaller circles if change
         color = ~palette(Employees_thisyear),
         fillColor = ~palette(Employees_thisyear),
         opacity = 0.75,
