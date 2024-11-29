@@ -411,11 +411,22 @@ function(input, output, session) {
       paste0('<span style="color: #eb3434">',round(mapdata$employee_diff_percent,2),'%</span>')
       )
     
+    #Change shape of data so middling sized points are more prominent
+    #Nice little "do for neg numbers too even tho makes no math sense" line from https://stackoverflow.com/a/64191142/5023561
+    # mapdata <- mapdata %>% 
+    #   mutate(
+    #     tweaked_markersizevalue = ifelse(
+    #       isolate(change_display_column()),#TRUE is employee count, FALSE is % diff
+    #       sqrt(Employees_thisyear),
+    #       sign(Employees_thisyear) * abs(Employees_thisyear)^(1 / 2)
+    #     )
+    #   )
+    
     leafletProxy('map') %>%
       addCircleMarkers(
         data = mapdata,
         label = ~Company,#label will be the marker hover
-        radius = ~ scales::rescale(Employees_thisyear, c(1, ifelse(isolate(change_display_column()),50,30))),#smaller circles if change
+        radius = ~ scales::rescale( Employees_thisyear , c(1, ifelse(isolate(change_display_column()),50,30))),#smaller circles if change
         color = ~palette(Employees_thisyear),
         fillColor = ~palette(Employees_thisyear),
         opacity = 0.75,

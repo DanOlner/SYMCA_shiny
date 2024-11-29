@@ -14,6 +14,8 @@ inc <- function( ... ){
 ct <- function(...) cat(...,"\n")
 
 
+
+
 #Return either all-positive-values fisher palette bins
 #Or one that diverges if values are on each side of zero
 returnpalette <- function(x, togglestate, n){
