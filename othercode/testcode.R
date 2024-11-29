@@ -90,6 +90,19 @@ fisher_breaks_neg
 
 
 
+#Test analytics plot putting selected data in SY context----
+
+#Example filtered df
+ch.manuf <- readRDS('data/companieshouse_employees_n_sectors_southyorkshire.rds') %>% filter(SIC_SECTION_NAME == 'Manufacturing') %>%
+  filter(
+    !is.na(Employees_lastyear),
+    Employees_lastyear > 4
+  ) %>%
+  mutate(employee_diff_percent = ((Employees_thisyear - Employees_lastyear)/Employees_lastyear) * 100)
+
+
+
+
 
 
 

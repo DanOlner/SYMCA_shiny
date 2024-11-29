@@ -58,7 +58,8 @@ about_tab_panel <-
 summary_panel <-
   function(title){
     tabPanel(
-      title
+      title,
+      
     )
   }
 
@@ -80,7 +81,9 @@ fluidPage(
               tabPanel("Map", 
                        sidebarLayout(
                          sidebarPanel(
-                           h4(strong("Explore sectors")),
+                           h4(strong("Drag/zoom on map")),
+                           h4(strong("Hover for name")),
+                           h4(strong("Click on firms for more details")),
                            sectorselect_input_panel(),
                            sicdigitselect_input_panel(),
                            sliderInput("employee_count_range",
