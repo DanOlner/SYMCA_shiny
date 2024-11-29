@@ -88,7 +88,8 @@ fluidPage(
                                        min = 0, max = 957, value = c(10,957)),
                            toggleSwitch(),
                            # uiOutput("mapdisplayvar_switch")#placeholder, will create toggle switch in server
-                           htmlOutput("firm_count")#reactive displays current count of firms being shown on map    
+                           htmlOutput("firm_count"),#reactive displays current count of firms being shown on map    
+                           htmlOutput("employee_count")#reactive displays current count of employees in selected firms
                          ),
                          mainPanel(
                            leafletOutput("map", height = 1000))

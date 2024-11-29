@@ -46,10 +46,10 @@ ch <- ch %>%
 #So rename the original first
 #Mutate: 1 - copy employees_thisyear into new col employees_mostrecent
 #We'll then use "Employees_thisyear" as the stand in "variable column" to overwrite
-ch <- ch %>%
-  mutate(
-    employees_mostrecent = Employees_thisyear
-  )
+# ch <- ch %>%
+#   mutate(
+#     employees_mostrecent = Employees_thisyear
+#   )
 
 
 #Make longer so most recent employee count and percent change are in one column so can filter on it
@@ -128,7 +128,8 @@ selectedSIClevel <- 1
 reactive_values <- 
   reactiveValues(
     ch = ch,#put the dataframe in a reactive context so other reactives can see it
-    count_of_firms = 0
+    count_of_firms = 0,
+    count_of_employees = 0
   )
 
 
@@ -141,6 +142,8 @@ function(input, output, session) {
   # MISC REACTIVES----
   
   output$firm_count <- renderUI(HTML(paste0("Number of firms displayed: <strong>", reactive_values$count_of_firms, "</strong>")))
+  
+  output$employee_count <- renderUI(HTML(paste0("Number of employees in selected firms: <strong>", reactive_values$count_of_employees, "</strong>")))
   
   #OBSERVED EVENTS FOR THE COMPANIES HOUSE DATAFRAME----
   
@@ -200,8 +203,7 @@ function(input, output, session) {
       #Use global / non reactive ch because we need to filter down (and back) from firms with two values for employee count
       reactive_values$ch <- ch %>% 
         mutate(
-          Employees_thisyear = employees_mostrecent
-          # displayvar = Employees_thisyear
+          mapdisplay_column = Employees_thisyear
         )
       
       #FALSE changes to percent diff - need to filter down to only firms with employee vals for both timepoints
@@ -215,7 +217,7 @@ function(input, output, session) {
           Employees_lastyear > 4
         ) %>% 
         mutate(
-          Employees_thisyear = employee_diff_percent
+          mapdisplay_column = employee_diff_percent
           # displayvar = employee_diff_percent
         )
       
@@ -225,10 +227,12 @@ function(input, output, session) {
       filter(
         sector_name == input$sector_chosen,
         SIC_digit == input$sicdigit_chosen,
-        employees_mostrecent >= input$employee_count_range[1] & employees_mostrecent <= isolate(input$employee_count_range[2])
+        Employees_thisyear >= input$employee_count_range[1] & Employees_thisyear <= isolate(input$employee_count_range[2])
       )
     
     reactive_values$count_of_firms <- nrow(df)
+    
+    reactive_values$count_of_employees <- sum(df$Employees_thisyear, na.rm = T)
     
     df
     
@@ -248,18 +252,18 @@ function(input, output, session) {
 
     # cat(inc(),": Slider update code called. min and max employees this year:\n")
     # cat(min(df$Employees_thisyear),",",max(df$Employees_thisyear),"\n")
-    inc(": 'Slider update values after sector/digit change' called. min and max employees this year: ",min(df$employees_mostrecent),",",max(df$employees_mostrecent))
+    inc(": 'Slider update values after sector/digit change' called. min and max employees this year: ",min(df$Employees_thisyear),",",max(df$Employees_thisyear))
 
     # cat('df being used in slider update:\n')
     # glimpse(df)
 
     #Add ten to min value if there are firms with more than ten employees, otherwise set to zero
-    mintouse <- ifelse(min(df$employees_mostrecent) + 10 < max(df$employees_mostrecent), 10, 0)
+    mintouse <- ifelse(min(df$Employees_thisyear) + 10 < max(df$Employees_thisyear), 10, 0)
 
     updateSliderInput(session, "employee_count_range",
-                      value = c(mintouse, max(df$employees_mostrecent)),
+                      value = c(mintouse, max(df$Employees_thisyear)),
                       min = 0,
-                      max = max(df$employees_mostrecent),
+                      max = max(df$Employees_thisyear),
                       step = 1
     )
 
@@ -305,7 +309,7 @@ function(input, output, session) {
     # debugonce(returnpalette)
     # ct("Toggle state prior to palette function call: ", isolate(change_display_column()))
     
-    palette <- returnpalette(mapdata$Employees_thisyear, isolate(input$mapdisplayvar_switch), n = 7)
+    palette <- returnpalette(mapdata$mapdisplay_column, isolate(input$mapdisplayvar_switch), n = 7)
     
     #change colour for polarity of % change
     percenttext <- ifelse(
@@ -319,7 +323,7 @@ function(input, output, session) {
       
       mapdata <- mapdata %>%
         mutate(
-          tweaked_markersizevalue = sqrt(Employees_thisyear)
+          tweaked_markersizevalue = sqrt(mapdisplay_column)
             )
       
     } else {
@@ -327,7 +331,7 @@ function(input, output, session) {
       mapdata <- mapdata %>%
         mutate(
           #Nice little "do for neg numbers too even tho makes no math sense" line from https://stackoverflow.com/a/64191142/5023561
-          tweaked_markersizevalue = sign(Employees_thisyear) * abs(Employees_thisyear)^(1 / 2)
+          tweaked_markersizevalue = sign(mapdisplay_column) * abs(mapdisplay_column)^(1 / 2)
             )
 
     }
@@ -339,13 +343,13 @@ function(input, output, session) {
         data = mapdata,
         label = ~Company,#label will be the marker hover
         radius = ~ scales::rescale( tweaked_markersizevalue , c(1, ifelse(isolate(input$mapdisplayvar_switch),50,30))),#smaller circles if change
-        color = ~palette(Employees_thisyear),
-        fillColor = ~palette(Employees_thisyear),
+        color = ~palette(mapdisplay_column),
+        fillColor = ~palette(mapdisplay_column),
         opacity = 0.75,
-        popup = paste0("<strong>",mapdata$Company,"</strong><br>","Employees this year: ",mapdata$employees_mostrecent,"<br>Employees last year: ",mapdata$Employees_lastyear,"<br>Change from last year: ",percenttext,"<br>Incorporation date: ",mapdata$IncorporationDate,'<br>Most recent accounts scraped: ',mapdata$enddate,'<br><strong><a href="',paste0("https://find-and-update.company-information.service.gov.uk/company/",mapdata$CompanyNumber),'">Companies House page</a>',"</strong>"),#this does NOT need to be in formula for some arbitrary reason
+        popup = paste0("<strong>",mapdata$Company,"</strong><br>","Employees this year: ",mapdata$Employees_thisyear,"<br>Employees last year: ",mapdata$Employees_lastyear,"<br>Change from last year: ",percenttext,"<br>Incorporation date: ",mapdata$IncorporationDate,'<br>Most recent accounts scraped: ',mapdata$enddate,'<br><strong><a href="',paste0("https://find-and-update.company-information.service.gov.uk/company/",mapdata$CompanyNumber),'">Companies House page</a>',"</strong>"),#this does NOT need to be in formula for some arbitrary reason
         group = 'firms'
       ) %>%
-      addLegend("topright", pal = palette, values = mapdata$Employees_thisyear,
+      addLegend("topright", pal = palette, values = mapdata$mapdisplay_column,
                 title = ifelse(isolate(input$mapdisplayvar_switch),"Employee count","% change employees"),
                 opacity = 1) %>%
       addScaleBar("topleft")
