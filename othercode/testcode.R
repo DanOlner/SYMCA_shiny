@@ -105,4 +105,22 @@ ch.manuf <- readRDS('data/companieshouse_employees_n_sectors_southyorkshire.rds'
 
 
 
+#Test letting classint drop to a single value----
+
+classInt::classIntervals(c(1,2,3,4,5,6,7), n = 5, style = "fisher")$brks %>% round() %>% unique
+
+classInt::classIntervals(c(1,2,3), n = 2, style = "fisher")$brks
+classInt::classIntervals(c(1), n = 1, style = "fisher")$brks
+classInt::classIntervals(c(1,2,3,4,5,6,7), n = 5, style = "fisher")$brks
+
+#If we have a single value, can we make a palette?
+#Yep, returns single value (even beyond 3 for some reason, though not for all numbers)
+palette <- colorBin(palette = "RdYlBu", bins = c(3), domain = 3)
+palette(3)
+
+
+
+
+
+
 

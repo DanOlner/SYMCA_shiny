@@ -21,25 +21,12 @@ if(is_installed("reactlog")){
 # ch <- readRDS('data/companieshouse_employees_n_sectors_southyorkshire.rds')
 
 #Version with SIC digit types in a single column
+# x <- Sys.time()
+
 ch <- readRDS('data/companieshouse_employees_n_sectors_southyorkshire_long.rds') %>%
-  select(Company,CompanyNumber,IncorporationDate,enddate,Employees_thisyear,Employees_lastyear,SIC_digit,sector_name)
+  select(Company,CompanyNumber,IncorporationDate,enddate,Employees_thisyear,Employees_lastyear,SIC_digit,sector_name,employee_diff_percent)
 
-ch <- ch %>%
-  mutate(
-    employee_diff_percent = ((Employees_thisyear - Employees_lastyear)/Employees_lastyear) * 100
-  )
-
-#Keep only most recent account date to avoid duplication
-#(Duplicates from e.g. older accounts have varying employee numbers, so combining in final filter combo gets mismatched vals compared to what's asked via employee number slider)
-#TODO: process so time series of values from multiple accounts can be displayed
-ch <- ch %>% 
-  group_by(CompanyNumber) %>% 
-  filter(enddate == max(enddate)) %>% 
-  ungroup()
-
-
-
-
+# Sys.time() - x
 
 #Quick hack to check toggle switch works - 
 #Use existing col name being used, reassign that to the two display columns
@@ -87,6 +74,20 @@ ch <- ch %>%
 #Save those digit names for the UI while we're here
 # saveRDS(unique(ch$SIC_digit)[c(4,2,3,1)],'data/initialSICDigitNames.rds')
 
+# ch <- ch %>%
+#   mutate(
+#     employee_diff_percent = ((Employees_thisyear - Employees_lastyear)/Employees_lastyear) * 100
+#   )
+# 
+# #Keep only most recent account date to avoid duplication
+# #(Duplicates from e.g. older accounts have varying employee numbers, so combining in final filter combo gets mismatched vals compared to what's asked via employee number slider)
+# #TODO: process so time series of values from multiple accounts can be displayed
+# ch <- ch %>%
+#   group_by(CompanyNumber) %>%
+#   filter(enddate == max(enddate)) %>%
+#   ungroup()
+
+
 # saveRDS(ch,'data/companieshouse_employees_n_sectors_southyorkshire_long.rds')
 
 
@@ -129,7 +130,10 @@ reactive_values <-
   reactiveValues(
     ch = ch,#put the dataframe in a reactive context so other reactives can see it
     count_of_firms = 0,
-    count_of_employees = 0
+    count_of_employees = 0,
+    stored_slidermin = 0,#Used so we can revert to previous values if the slider range would make firm count zero
+    stored_slidermax = 0,
+    stored_maxfirmcount = 0
   )
 
 
@@ -230,6 +234,23 @@ function(input, output, session) {
         Employees_thisyear >= input$employee_count_range[1] & Employees_thisyear <= isolate(input$employee_count_range[2])
       )
     
+    
+    
+    #Check if zero firms produced
+      # if(nrow(df) == 0){
+      # 
+      #   ct("Firm count was zero after slider change - resetting to previous values.")
+      # 
+      #   updateSliderInput(session, "employee_count_range",
+      #                     value = c(isolate(reactive_values$stored_slidermin),isolate(reactive_values$stored_slidermax)),
+      #                     min = 0,
+      #                     max = reactive_values$stored_maxfirmcount,
+      #                     step = 1
+      #   )
+      # 
+      # }
+    
+    
     reactive_values$count_of_firms <- nrow(df)
     
     reactive_values$count_of_employees <- sum(df$Employees_thisyear, na.rm = T)
@@ -249,10 +270,12 @@ function(input, output, session) {
       sector_name == input$sector_chosen,
       SIC_digit == input$sicdigit_chosen
     )
+    
+    inc('Setting slider vals after sector / SIC digit change. Size of df: ', nrow(df))
 
     # cat(inc(),": Slider update code called. min and max employees this year:\n")
     # cat(min(df$Employees_thisyear),",",max(df$Employees_thisyear),"\n")
-    inc(": 'Slider update values after sector/digit change' called. min and max employees this year: ",min(df$Employees_thisyear),",",max(df$Employees_thisyear))
+    ct(": 'Slider update values after sector/digit change' called. min and max employees this year: ",min(df$Employees_thisyear),",",max(df$Employees_thisyear))
 
     # cat('df being used in slider update:\n')
     # glimpse(df)
@@ -267,10 +290,60 @@ function(input, output, session) {
                       step = 1
     )
 
-    cat("range bar: ", isolate(input$employee_count_range),"\n")
+    ct("range bar now outputting: ", isolate(input$employee_count_range))
 
   })
   
+  
+  
+  
+  
+  
+  # #Check that slider changes leave at least four firms visible
+  # observeEvent(input$employee_count_range, {
+  #   
+  #   freezeReactiveValue(input, "employee_count_range")
+  #   
+  #   inc('Employee count range- change check, do we still have at least one firm?\nPrevious values: ', 
+  #       isolate(reactive_values$stored_slidermin),",",isolate(reactive_values$stored_slidermax))
+  #   
+  #   ct("New values: ", isolate(input$employee_count_range[1]),isolate(input$employee_count_range[2]))   
+  #   
+  #   #Check that new values lead to at least one firm available to view
+  #   df_new <- reactive_values$ch %>% 
+  #     filter(
+  #       sector_name == isolate(input$sector_chosen),
+  #       SIC_digit == isolate(input$sicdigit_chosen),
+  #       Employees_thisyear >= isolate(input$employee_count_range[1]) & Employees_thisyear <= isolate(input$employee_count_range[2])
+  #     )
+  #   
+  #   #Need this to get max count value
+  #   df_previous <- reactive_values$ch %>% 
+  #     filter(
+  #       sector_name == isolate(input$sector_chosen),
+  #       SIC_digit == isolate(input$sicdigit_chosen),
+  #       Employees_thisyear >= isolate(reactive_values$stored_slidermin) & Employees_thisyear <= isolate(reactive_values$stored_slidermax)
+  #     )
+  #   
+  #   
+  #   
+  #   #If no rows, revert to previous slider values
+  #   if(nrow(df_new) == 0){
+  #     
+  #     ct("Firm count was zero after slider change - resetting to previous values.")
+  #     
+  #     updateSliderInput(session, "employee_count_range",
+  #                       value = c(isolate(reactive_values$stored_slidermin),isolate(reactive_values$stored_slidermax)),
+  #                       min = 0,
+  #                       max = max(df_previous$Employees_thisyear),
+  #                       step = 1
+  #     )
+  #     
+  #   }
+  # 
+  # })
+  # 
+  # 
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~
   #MAP CODE------------------
@@ -283,8 +356,6 @@ function(input, output, session) {
     
     #First cat wrapper increments counter
     inc("In draw_firms.")
-    
-    ct("It's this code that's running, right???")
     
     ct("Data going into map with this range: ",min(mapdata$Employees_thisyear),max(mapdata$Employees_thisyear))
     # glimpse(mapdata)
@@ -309,7 +380,29 @@ function(input, output, session) {
     # debugonce(returnpalette)
     # ct("Toggle state prior to palette function call: ", isolate(change_display_column()))
     
+    if(nrow(mapdata) > 0){
+    
     palette <- returnpalette(mapdata$mapdisplay_column, isolate(input$mapdisplayvar_switch), n = 7)
+    
+    } else {
+      
+      ct("Zero firms!")
+      
+      inc('Previous values for stored slider min, max and max firm count: ', 
+                isolate(reactive_values$stored_slidermin),",",
+          isolate(reactive_values$stored_slidermax),",",
+          isolate(reactive_values$stored_maxfirmcount))
+          
+      updateSliderInput(session, "employee_count_range",
+                                              value = c(isolate(reactive_values$stored_slidermin),isolate(reactive_values$stored_slidermax)),
+                                              min = 0,
+                                              max = isolate(reactive_values$stored_maxfirmcount),
+                                              step = 1
+                            )
+      
+      validate("Zero firms")
+      
+    }#end else
     
     #change colour for polarity of % change
     percenttext <- ifelse(
@@ -336,7 +429,7 @@ function(input, output, session) {
 
     }
     
-    glimpse(mapdata)
+    # glimpse(mapdata)
     
     leafletProxy('map') %>%
       addCircleMarkers(
@@ -354,6 +447,12 @@ function(input, output, session) {
                 opacity = 1) %>%
       addScaleBar("topleft")
     
+    
+    
+    #Set here so we can revert to previous values if the slider range would make firm count zero
+    reactive_values$stored_slidermin = isolate(input$employee_count_range[1])
+    reactive_values$stored_slidermax = isolate(input$employee_count_range[2])
+    reactive_values$stored_maxfirmcount = max(mapdata$Employees_thisyear)
     
   }
   
