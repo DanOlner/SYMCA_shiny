@@ -12,7 +12,7 @@ library(markdown)
 
 source('othercode/functions.R')
 
-# #Update
+# #Update / do in conda if in env
 # install.packages(c(
 #   "shiny",
 #   "tidyverse",
@@ -25,4 +25,4 @@ source('othercode/functions.R')
 #   "shinyWidgets",
 #   "shinyjs",
 #   "markdown"
-# ))
+# ), dependencies = T)
