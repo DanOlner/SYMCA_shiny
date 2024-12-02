@@ -50,9 +50,18 @@ returnpalette <- function(x, togglestate, n){
     
     # ct("Current slider vals: ",isolate(input$employee_count_range))
     
-    palette <- colorBin(palette = "RdYlBu", bins = fisher_breaks, domain = x)
+    #If it hasn't been found here, x had two entries (and classIntervals can't work with a single val) - set palette accordingly
+    if(exists("fisher_breaks")){
+    
+      palette <- colorBin(palette = "RdYlBu", bins = fisher_breaks, domain = x)
+    
+    } else {
+      
+      palette <- colorBin(palette = "RdYlBu", bins = x, domain = x)
+      
+    }
 
-  } else {
+  } else {#else if togglestate
 
     # ct('falseping!')
 
@@ -66,7 +75,11 @@ returnpalette <- function(x, togglestate, n){
 
   }
 
-  ct("Inside returnpalette function - Fisher breaks made (including rounding): ", fisher_breaks)
+  if(exists("fisher_breaks")){
+    ct("Inside returnpalette function - Fisher breaks made (including rounding): ", fisher_breaks)
+  } else {
+    ct("Inside returnpalette function - NO Fisher breaks made.")
+  }
   
   return(palette)
 

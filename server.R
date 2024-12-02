@@ -144,7 +144,6 @@ function(input, output, session) {
   disable("sicdigit_chosen") 
   
   # MISC REACTIVES----
-  
   output$firm_count <- renderUI(HTML(paste0("Number of firms displayed: <strong>", reactive_values$count_of_firms, "</strong>")))
   
   output$employee_count <- renderUI(HTML(paste0("Number of employees in selected firms: <strong>", reactive_values$count_of_employees, "</strong>")))
@@ -236,10 +235,10 @@ function(input, output, session) {
     
     
     
-    #Check if zero firms produced
-      # if(nrow(df) == 0){
+    #Check if fewer than two firms result from filters
+      # if(nrow(df) < 2){
       # 
-      #   ct("Firm count was zero after slider change - resetting to previous values.")
+      #   ct("Firm count was less than 2 after input change - resetting to previous values.")
       # 
       #   updateSliderInput(session, "employee_count_range",
       #                     value = c(isolate(reactive_values$stored_slidermin),isolate(reactive_values$stored_slidermax)),
@@ -247,6 +246,14 @@ function(input, output, session) {
       #                     max = reactive_values$stored_maxfirmcount,
       #                     step = 1
       #   )
+      #   
+      #   #Use previous slider vals 
+      #   df <- reactive_values$ch %>% 
+      #     filter(
+      #       sector_name == isolate(input$sector_chosen),
+      #       SIC_digit == isolate(input$sicdigit_chosen),
+      #       Employees_thisyear >= isolate(reactive_values$stored_slidermin) & Employees_thisyear <= isolate(reactive_values$stored_slidermax)
+      #     )
       # 
       # }
     
@@ -289,8 +296,11 @@ function(input, output, session) {
                       max = max(df$Employees_thisyear),
                       step = 1
     )
+    
+    #Store max df employees from here as will be correct value if need to reset elsewhere
+    reactive_values$stored_maxfirmcount <- max(df$Employees_thisyear)
 
-    ct("range bar now outputting: ", isolate(input$employee_count_range))
+    # ct("range bar now outputting: ", isolate(input$employee_count_range))
 
   })
   
@@ -300,7 +310,14 @@ function(input, output, session) {
   
   
   # #Check that slider changes leave at least four firms visible
-  # observeEvent(input$employee_count_range, {
+  observeEvent(input$employee_count_range, {
+    
+    inc("observed slider change")
+    
+    reactive_values$stored_slidermin = isolate(input$employee_count_range[1])
+    reactive_values$stored_slidermax = isolate(input$employee_count_range[2])
+
+  })
   #   
   #   freezeReactiveValue(input, "employee_count_range")
   #   
@@ -373,86 +390,84 @@ function(input, output, session) {
     #TODO: fix breaks when only single firms showing up (I think is the problem)
     
     #This is just a cat wrapper that adds line break (so can be same inputs as inc)
-    # ct("Making legend bins. Min max employee count here: ", min(mapdata$Employees_thisyear),max(mapdata$Employees_thisyear))
+    ct("Making legend bins. Min max employee count here: ", min(mapdata$Employees_thisyear),max(mapdata$Employees_thisyear))
     
     #MAKE LEGEND, DIFFERENT ONE FOR EACH VARIABLE TYPE AS PERCENT DIFF IS NEG AND POS AND WANT NICE BREAK AT ZERO
    
     # debugonce(returnpalette)
     # ct("Toggle state prior to palette function call: ", isolate(change_display_column()))
     
-    if(nrow(mapdata) > 0){
     
-    palette <- returnpalette(mapdata$mapdisplay_column, isolate(input$mapdisplayvar_switch), n = 7)
+    #DON'T DISPLAY IF FEWER THAN 2
+    if(nrow(mapdata) > 1){
     
-    } else {
+      palette <- returnpalette(mapdata$mapdisplay_column, isolate(input$mapdisplayvar_switch), n = 7)
       
-      ct("Zero firms!")
+      #change colour for polarity of % change
+      percenttext <- ifelse(
+        mapdata$employee_diff_percent >0, 
+        paste0('<span style="color: #64eb34">',round(mapdata$employee_diff_percent,2),'%</span>'),
+        paste0('<span style="color: #eb3434">',round(mapdata$employee_diff_percent,2),'%</span>')
+        )
       
-      inc('Previous values for stored slider min, max and max firm count: ', 
-                isolate(reactive_values$stored_slidermin),",",
-          isolate(reactive_values$stored_slidermax),",",
-          isolate(reactive_values$stored_maxfirmcount))
-          
-      updateSliderInput(session, "employee_count_range",
-                                              value = c(isolate(reactive_values$stored_slidermin),isolate(reactive_values$stored_slidermax)),
-                                              min = 0,
-                                              max = isolate(reactive_values$stored_maxfirmcount),
-                                              step = 1
-                            )
+      #Change shape of data so middling sized points are more prominent
+      if(isolate(input$mapdisplayvar_switch)){
+        
+        mapdata <- mapdata %>%
+          mutate(
+            tweaked_markersizevalue = sqrt(mapdisplay_column)
+              )
+        
+      } else {
+        
+        mapdata <- mapdata %>%
+          mutate(
+            #Nice little "do for neg numbers too even tho makes no math sense" line from https://stackoverflow.com/a/64191142/5023561
+            tweaked_markersizevalue = sign(mapdisplay_column) * abs(mapdisplay_column)^(1 / 2)
+              )
+  
+      }
       
-      validate("Zero firms")
+      # glimpse(mapdata)
       
-    }#end else
-    
-    #change colour for polarity of % change
-    percenttext <- ifelse(
-      mapdata$employee_diff_percent >0, 
-      paste0('<span style="color: #64eb34">',round(mapdata$employee_diff_percent,2),'%</span>'),
-      paste0('<span style="color: #eb3434">',round(mapdata$employee_diff_percent,2),'%</span>')
-      )
-    
-    #Change shape of data so middling sized points are more prominent
-    if(isolate(input$mapdisplayvar_switch)){
+      leafletProxy('map') %>%
+        addCircleMarkers(
+          data = mapdata,
+          label = ~Company,#label will be the marker hover
+          radius = ~ scales::rescale( tweaked_markersizevalue , c(1, ifelse(isolate(input$mapdisplayvar_switch),50,30))),#smaller circles if change
+          color = ~palette(mapdisplay_column),
+          fillColor = ~palette(mapdisplay_column),
+          opacity = 0.75,
+          popup = paste0("<strong>",mapdata$Company,"</strong><br>","Employees this year: ",mapdata$Employees_thisyear,"<br>Employees last year: ",mapdata$Employees_lastyear,"<br>Change from last year: ",percenttext,"<br>Incorporation date: ",mapdata$IncorporationDate,'<br>Most recent accounts scraped: ',mapdata$enddate,'<br><strong><a href="',paste0("https://find-and-update.company-information.service.gov.uk/company/",mapdata$CompanyNumber),'" target="_blank">Companies House page</a>',"</strong>"),#this does NOT need to be in formula for some arbitrary reason
+          group = 'firms'
+        ) %>%
+        addLegend("topright", pal = palette, values = mapdata$mapdisplay_column,
+                  title = ifelse(isolate(input$mapdisplayvar_switch),"Employee count","% change employees"),
+                  opacity = 1) %>%
+        addScaleBar("topleft")
       
-      mapdata <- mapdata %>%
-        mutate(
-          tweaked_markersizevalue = sqrt(mapdisplay_column)
-            )
       
-    } else {
+      # } else {#if nnrows available is less than two...
+      #   
+      #   ct("Zero or one firms!")
+      #   
+      #   inc('Previous values for stored slider min, max and max firm count: ', 
+      #       isolate(reactive_values$stored_slidermin),",",
+      #       isolate(reactive_values$stored_slidermax),",",
+      #       isolate(reactive_values$stored_maxfirmcount))
+      #   
+      #   updateSliderInput(session, "employee_count_range",
+      #                     value = c(isolate(reactive_values$stored_slidermin),isolate(reactive_values$stored_slidermax)),
+      #                     min = 0,
+      #                     max = isolate(reactive_values$stored_maxfirmcount),
+      #                     step = 1
+      #   )
+      #   
+        # validate("Zero or one firms!")
       
-      mapdata <- mapdata %>%
-        mutate(
-          #Nice little "do for neg numbers too even tho makes no math sense" line from https://stackoverflow.com/a/64191142/5023561
-          tweaked_markersizevalue = sign(mapdisplay_column) * abs(mapdisplay_column)^(1 / 2)
-            )
-
-    }
-    
-    # glimpse(mapdata)
-    
-    leafletProxy('map') %>%
-      addCircleMarkers(
-        data = mapdata,
-        label = ~Company,#label will be the marker hover
-        radius = ~ scales::rescale( tweaked_markersizevalue , c(1, ifelse(isolate(input$mapdisplayvar_switch),50,30))),#smaller circles if change
-        color = ~palette(mapdisplay_column),
-        fillColor = ~palette(mapdisplay_column),
-        opacity = 0.75,
-        popup = paste0("<strong>",mapdata$Company,"</strong><br>","Employees this year: ",mapdata$Employees_thisyear,"<br>Employees last year: ",mapdata$Employees_lastyear,"<br>Change from last year: ",percenttext,"<br>Incorporation date: ",mapdata$IncorporationDate,'<br>Most recent accounts scraped: ',mapdata$enddate,'<br><strong><a href="',paste0("https://find-and-update.company-information.service.gov.uk/company/",mapdata$CompanyNumber),'" target="_blank">Companies House page</a>',"</strong>"),#this does NOT need to be in formula for some arbitrary reason
-        group = 'firms'
-      ) %>%
-      addLegend("topright", pal = palette, values = mapdata$mapdisplay_column,
-                title = ifelse(isolate(input$mapdisplayvar_switch),"Employee count","% change employees"),
-                opacity = 1) %>%
-      addScaleBar("topleft")
+    }#end if
     
     
-    
-    #Set here so we can revert to previous values if the slider range would make firm count zero
-    reactive_values$stored_slidermin = isolate(input$employee_count_range[1])
-    reactive_values$stored_slidermax = isolate(input$employee_count_range[2])
-    reactive_values$stored_maxfirmcount = max(mapdata$Employees_thisyear)
     
   }
   
