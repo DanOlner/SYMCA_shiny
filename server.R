@@ -398,8 +398,8 @@ function(input, output, session) {
     # ct("Toggle state prior to palette function call: ", isolate(change_display_column()))
     
     
-    #DON'T DISPLAY IF FEWER THAN 2
-    if(nrow(mapdata) > 1){
+    #DON'T RUN IF NO FIRMS TO SHOW
+    if(nrow(mapdata) > 0){
     
       palette <- returnpalette(mapdata$mapdisplay_column, isolate(input$mapdisplayvar_switch), n = 7)
       

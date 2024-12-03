@@ -120,7 +120,12 @@ palette(3)
 
 
 
+# Test case_when
+y <- c(1,2,3,4)
 
-
+case_when(
+   y == 1 ~ (y * 2),
+  .default = 30
+)
 
 
