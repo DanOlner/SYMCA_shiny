@@ -15,17 +15,9 @@ ct <- function(...) cat(...,"\n")
 
 
 
-# returnpalette <- function(x, togglestate, n){
-# 
-#   while (n > 0) {
-# 
-#   palette <- case_when(
-# 
-#    togglestate
-# 
-#    )
-# 
-# }
+
+
+
 
 
 #Used in returnpalette function -->
@@ -38,6 +30,7 @@ gracefully_drop_palettebins <- function(x, n, palette = "RdYlBu"){
     # Try to create class intervals
     try_result <- try({
       fisher_breaks <- classInt::classIntervals(x, n = n, style = "fisher")$brks %>% round %>% unique
+      # fisher_breaks <- classInt::classIntervals(x, n = n, style = "fisher")$brks %>% unique
     }, silent = TRUE)
     
     # Check if the result was successful
@@ -53,6 +46,8 @@ gracefully_drop_palettebins <- function(x, n, palette = "RdYlBu"){
   #If it hasn't been found here, x had a single value (and classIntervals can't work with a single val) - set palette accordingly
   if(exists("fisher_breaks")){
     
+    # inc("Inside graceful palette bin dropping. Fisher values found: ", fisher_breaks)
+    
     return(
       list(
         palette = colorBin(palette = "RdYlBu", bins = fisher_breaks, domain = x),
@@ -62,11 +57,13 @@ gracefully_drop_palettebins <- function(x, n, palette = "RdYlBu"){
     
   } else {
     
+    # inc("Inside graceful palette bin dropping. No fisher values found. Value of x: ", x)
+    
     #Single value...
     return(
       list(
-        palette = colorFactor(palette = palette, domain = x),
-        values = x
+        palette = colorFactor(palette = palette, domain = round(x)),
+        values = round(x)
         )
       )
     
@@ -75,48 +72,52 @@ gracefully_drop_palettebins <- function(x, n, palette = "RdYlBu"){
 }
 
 
+#For diverging palettes, return the appropriate kind of palette if the length of the bin values is one
+#replicating the behaviour in the function above that returns colorFactor rather than colorBin if only one value
+return_diverging_palette <- function(bins,x){
+
+  if(length(bins) > 1){
+    
+    return(colorBin(palette = "RdYlBu", bins = bins, domain = x))
+      
+  } else {
+    
+    return(colorFactor(palette = "RdYlBu", domain = x))
+    
+  }
+
+}
+
 
 #Return either all-positive-values fisher palette bins
 #Or one that diverges if values are on each side of zero
 returnpalette <- function(x, togglestate, n){
   
-  inc('Inside returnpalette function - number of values passed in: ', length(x))
+  # inc('Inside returnpalette function - number of values passed in: ', length(x))
 
   # palette <- NULL
 
   #togglestate TRUE is to display employee counts, FALSE for % change (possibly diverging)
   if(togglestate){
 
-    # ct('trueping!')
+    #Can palette directly if just doing one set of values
     palette <- gracefully_drop_palettebins(x,n)$palette
    
   } else {#else if togglestate
 
-    # ct('falseping!')
-    
-    #May have single values for each of those, or no values at all.
-    # fisher_breaks_pos <- classInt::classIntervals(x[x > 0], n = ifelse(n %% 2 == 0, n/2, (n-1)/2), style = "fisher")$brks %>% round %>% unique
-    # 
-    # # fisher_breaks_pos <- classInt::classIntervals(x[x > 0], n = n/2, style = "fisher")$brks %>% round %>% unique
-    # fisher_breaks_neg <- classInt::classIntervals(x[x <= 0], n = n/2, style = "fisher")$brks %>% round()
-    
-    
-     
-    # fisher_breaks <- c(fisher_breaks_neg,fisher_breaks_pos)
-
+    #Get the values first THEN combine into the palette so diverges each side of zero correctly
     palette_neg_values <- gracefully_drop_palettebins(x[x < 0],n/2 %>% round)$values
     palette_pos_values <- gracefully_drop_palettebins(x[x >= 0],n/2 %>% round)$values
     
-    palette <- colorBin(palette = "RdYlBu", bins = c(palette_neg_values,palette_pos_values) %>% unique, domain = x)
+    ct('% change: finding values for positive and negative palette. Values returned:')
+    ct('Neg: ', palette_neg_values)
+    ct('Pos: ', palette_pos_values)
+    
+    palette <- return_diverging_palette(c(palette_neg_values,palette_pos_values) %>% unique, x)
     
 
   }
 
-  if(exists("fisher_breaks")){
-    ct("Inside returnpalette function - Fisher breaks made (including rounding): ", fisher_breaks)
-  } else {
-    ct("Inside returnpalette function - NO Fisher breaks made.")
-  }
   
   return(palette)
 

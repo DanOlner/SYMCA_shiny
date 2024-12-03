@@ -12,100 +12,25 @@ if(is_installed("reactlog")){
 
 
 
-#DATA (including a little pre-processing)----
+#DATA----
 
-
-#Pre-processed below, saved, loaded above it
+#See prepcode.R for some preprocessing to get ready for live use
 
 #companies house data for South Yorkshire
-# ch <- readRDS('data/companieshouse_employees_n_sectors_southyorkshire.rds')
-
 #Version with SIC digit types in a single column
-# x <- Sys.time()
-
 ch <- readRDS('data/companieshouse_employees_n_sectors_southyorkshire_long.rds') %>%
   select(Company,CompanyNumber,IncorporationDate,enddate,Employees_thisyear,Employees_lastyear,SIC_digit,sector_name,employee_diff_percent)
 
-# Sys.time() - x
-
-#Quick hack to check toggle switch works - 
-#Use existing col name being used, reassign that to the two display columns
-#So rename the original first
-#Mutate: 1 - copy employees_thisyear into new col employees_mostrecent
-#We'll then use "Employees_thisyear" as the stand in "variable column" to overwrite
-# ch <- ch %>%
-#   mutate(
-#     employees_mostrecent = Employees_thisyear
-#   )
-
-
-#Make longer so most recent employee count and percent change are in one column so can filter on it
-#65mb before... 90mb after. Args for not just making longer the whole time! Toh it's in server memory, not being sent to client
-# chk <- ch %>%
-#   pivot_longer(cols = c(Employees_thisyear,employee_diff_percent),names_to = 'display_val', values_to = 'value')
-
-#Convert to latlon and resave
-# ch <- ch %>% st_transform("EPSG:4326")
-
-#Two entries with employee values filled in by error, from financials
-#Remove
-# ch <- ch %>% filter(!CompanyNumber %in% c('08638732','11756651'))
-# saveRDS(ch,'data/companieshouse_employees_n_sectors_southyorkshire.rds')
-
-#Make SIC digit names long, so selecting by digit level is a simple filter, not faffing with columns
-# ch <- ch %>%
-#   select(-c(SICCode.SicText_1:SICCode.SicText_4,SIC_5DIGIT_CODE,SIC_2DIGIT_CODE,SIC_2DIGIT_CODE_NUMERIC,SIC_3DIGIT_CODE,SIC_SECTION_LETTER,SIC_SECTION_CODE)) %>%
-#   pivot_longer(cols = SIC_5DIGIT_NAME:SIC_SECTION_NAME, names_to = "SIC_digit", values_to = "sector_name", cols_vary = "slowest")
-# 
-# #That's duplicating values so is larger than the original, by about 50%
-# pryr::object_size(ch)
-
-#Update the digit values so is friendly in the dropdown. Here or column names, both fine!
-# ch <- ch %>% 
-#   mutate(
-#     SIC_digit = case_when(
-#       SIC_digit == "SIC_5DIGIT_NAME" ~ "5 digit",  
-#       SIC_digit == "SIC_2DIGIT_NAME" ~ "2 digit",  
-#       SIC_digit == "SIC_3DIGIT_NAME" ~ "3 digit",  
-#       SIC_digit == "SIC_SECTION_NAME" ~ "Section"
-#     )
-#   )
-
-#Save those digit names for the UI while we're here
-# saveRDS(unique(ch$SIC_digit)[c(4,2,3,1)],'data/initialSICDigitNames.rds')
-
-# ch <- ch %>%
-#   mutate(
-#     employee_diff_percent = ((Employees_thisyear - Employees_lastyear)/Employees_lastyear) * 100
-#   )
-# 
-# #Keep only most recent account date to avoid duplication
-# #(Duplicates from e.g. older accounts have varying employee numbers, so combining in final filter combo gets mismatched vals compared to what's asked via employee number slider)
-# #TODO: process so time series of values from multiple accounts can be displayed
-# ch <- ch %>%
-#   group_by(CompanyNumber) %>%
-#   filter(enddate == max(enddate)) %>%
-#   ungroup()
-
-
-# saveRDS(ch,'data/companieshouse_employees_n_sectors_southyorkshire_long.rds')
-
+ch <- ch %>% 
+  mutate(
+    employee_diff_percent = round(employee_diff_percent)
+  )
 
 #Ordered SIC lookup, so sectors are listed in correct order in dropdown (see prepcode)
 SIClookup_long <- readRDS('data/SICorderedlookup.rds')
 
-
-
 #South yorkshire local authority boundaries
-# sy_boundaries <- st_read("data/mapdata/sy_localauthorityboundaries.shp")
-
-#Convert to latlon and save as compressed
-# sy_boundaries <- sy_boundaries %>% st_transform("EPSG:4326")
-# saveRDS(sy_boundaries, 'data/mapdata/sy_localauthorityboundaries.rds')
-
-#load once processed
 sy_boundaries <- readRDS('data/mapdata/sy_localauthorityboundaries.rds')
-
 
 #SIC digit names from the columns - needs reordering
 SICdigitnames <- colnames(ch)[which(colnames(ch) %in% c('SIC_SECTION_NAME','SIC_2DIGIT_NAME','SIC_3DIGIT_NAME','SIC_5DIGIT_NAME'))][c(4,2,3,1)]
@@ -129,7 +54,7 @@ selectedSIClevel <- 1
 reactive_values <- 
   reactiveValues(
     ch = ch,#put the dataframe in a reactive context so other reactives can see it
-    count_of_firms = 0,
+    count_of_firms = 1,
     count_of_employees = 0,
     stored_slidermin = 0,#Used so we can revert to previous values if the slider range would make firm count zero
     stored_slidermax = 0,
@@ -144,7 +69,15 @@ function(input, output, session) {
   disable("sicdigit_chosen") 
   
   # MISC REACTIVES----
-  output$firm_count <- renderUI(HTML(paste0("Number of firms displayed: <strong>", reactive_values$count_of_firms, "</strong>")))
+  
+  #Change this first one depending on whether firm count is zero
+  output$firm_count <- renderUI({
+    if (reactive_values$count_of_firms == 0) {
+      HTML(paste0('<span style="color: #eb3434"><strong>Zero firms have this employee count - change slider values</strong></span>'))
+    } else {
+      HTML(paste0("Number of firms displayed: <strong>", reactive_values$count_of_firms, "</strong>"))
+    }
+  })
   
   output$employee_count <- renderUI(HTML(paste0("Number of employees in selected firms: <strong>", reactive_values$count_of_employees, "</strong>")))
   
@@ -287,8 +220,10 @@ function(input, output, session) {
     # cat('df being used in slider update:\n')
     # glimpse(df)
 
-    #Add ten to min value if there are firms with more than ten employees, otherwise set to zero
-    mintouse <- ifelse(min(df$Employees_thisyear) + 10 < max(df$Employees_thisyear), 10, 0)
+    #Add ten to min value if there are firms with more than ten employees
+    #And there are 25+ firms in this sector
+    #therwise set to zero
+    mintouse <- ifelse(min(df$Employees_thisyear) + 10 < max(df$Employees_thisyear) & nrow(df) > 24, 10, 0)
 
     updateSliderInput(session, "employee_count_range",
                       value = c(mintouse, max(df$Employees_thisyear)),
@@ -400,6 +335,9 @@ function(input, output, session) {
     
     #DON'T RUN IF NO FIRMS TO SHOW
     if(nrow(mapdata) > 0){
+      
+      ct('Firms found. Going to attempt to make palette with following df:')
+      glimpse(mapdata)
     
       palette <- returnpalette(mapdata$mapdisplay_column, isolate(input$mapdisplayvar_switch), n = 7)
       
