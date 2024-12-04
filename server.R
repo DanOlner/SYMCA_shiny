@@ -167,30 +167,6 @@ function(input, output, session) {
       )
     
     
-    
-    #Check if fewer than two firms result from filters
-      # if(nrow(df) < 2){
-      # 
-      #   ct("Firm count was less than 2 after input change - resetting to previous values.")
-      # 
-      #   updateSliderInput(session, "employee_count_range",
-      #                     value = c(isolate(reactive_values$stored_slidermin),isolate(reactive_values$stored_slidermax)),
-      #                     min = 0,
-      #                     max = reactive_values$stored_maxfirmcount,
-      #                     step = 1
-      #   )
-      #   
-      #   #Use previous slider vals 
-      #   df <- reactive_values$ch %>% 
-      #     filter(
-      #       sector_name == isolate(input$sector_chosen),
-      #       SIC_digit == isolate(input$sicdigit_chosen),
-      #       Employees_thisyear >= isolate(reactive_values$stored_slidermin) & Employees_thisyear <= isolate(reactive_values$stored_slidermax)
-      #     )
-      # 
-      # }
-    
-    
     reactive_values$count_of_firms <- nrow(df)
     
     reactive_values$count_of_employees <- sum(df$Employees_thisyear, na.rm = T)
@@ -253,49 +229,7 @@ function(input, output, session) {
     reactive_values$stored_slidermax = isolate(input$employee_count_range[2])
 
   })
-  #   
-  #   freezeReactiveValue(input, "employee_count_range")
-  #   
-  #   inc('Employee count range- change check, do we still have at least one firm?\nPrevious values: ', 
-  #       isolate(reactive_values$stored_slidermin),",",isolate(reactive_values$stored_slidermax))
-  #   
-  #   ct("New values: ", isolate(input$employee_count_range[1]),isolate(input$employee_count_range[2]))   
-  #   
-  #   #Check that new values lead to at least one firm available to view
-  #   df_new <- reactive_values$ch %>% 
-  #     filter(
-  #       sector_name == isolate(input$sector_chosen),
-  #       SIC_digit == isolate(input$sicdigit_chosen),
-  #       Employees_thisyear >= isolate(input$employee_count_range[1]) & Employees_thisyear <= isolate(input$employee_count_range[2])
-  #     )
-  #   
-  #   #Need this to get max count value
-  #   df_previous <- reactive_values$ch %>% 
-  #     filter(
-  #       sector_name == isolate(input$sector_chosen),
-  #       SIC_digit == isolate(input$sicdigit_chosen),
-  #       Employees_thisyear >= isolate(reactive_values$stored_slidermin) & Employees_thisyear <= isolate(reactive_values$stored_slidermax)
-  #     )
-  #   
-  #   
-  #   
-  #   #If no rows, revert to previous slider values
-  #   if(nrow(df_new) == 0){
-  #     
-  #     ct("Firm count was zero after slider change - resetting to previous values.")
-  #     
-  #     updateSliderInput(session, "employee_count_range",
-  #                       value = c(isolate(reactive_values$stored_slidermin),isolate(reactive_values$stored_slidermax)),
-  #                       min = 0,
-  #                       max = max(df_previous$Employees_thisyear),
-  #                       step = 1
-  #     )
-  #     
-  #   }
-  # 
-  # })
-  # 
-  # 
+ 
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~
   #MAP CODE------------------
@@ -368,6 +302,19 @@ function(input, output, session) {
       
       # glimpse(mapdata)
       
+      #First layer: clear dark marker to help other markers stand out (check performance...)
+      leafletProxy('map') %>%
+        addCircleMarkers(
+          data = mapdata,
+          radius = ~ scales::rescale( tweaked_markersizevalue , c(1, ifelse(isolate(input$mapdisplayvar_switch),54,34))),#smaller circles if change
+          color = 'black',
+          weight = 2,
+          fillOpacity = 0,
+          opacity = 1.,
+          group = 'firms'
+        ) 
+      
+      #Top layer with labels etc
       leafletProxy('map') %>%
         addCircleMarkers(
           data = mapdata,
@@ -385,23 +332,7 @@ function(input, output, session) {
         addScaleBar("topleft")
       
       
-      # } else {#if nnrows available is less than two...
-      #   
-      #   ct("Zero or one firms!")
-      #   
-      #   inc('Previous values for stored slider min, max and max firm count: ', 
-      #       isolate(reactive_values$stored_slidermin),",",
-      #       isolate(reactive_values$stored_slidermax),",",
-      #       isolate(reactive_values$stored_maxfirmcount))
-      #   
-      #   updateSliderInput(session, "employee_count_range",
-      #                     value = c(isolate(reactive_values$stored_slidermin),isolate(reactive_values$stored_slidermax)),
-      #                     min = 0,
-      #                     max = isolate(reactive_values$stored_maxfirmcount),
-      #                     step = 1
-      #   )
-      #   
-        # validate("Zero or one firms!")
+     
       
     }#end if
     
