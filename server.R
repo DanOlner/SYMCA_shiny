@@ -302,11 +302,17 @@ function(input, output, session) {
       
       # glimpse(mapdata)
       
+      # minmarker = 15
+      # maxmarker = 30
+      
+      minmarker = 30
+      maxmarker = 50
+      
       #First layer: clear dark marker to help other markers stand out (check performance...)
       leafletProxy('map') %>%
         addCircleMarkers(
           data = mapdata,
-          radius = ~ scales::rescale( tweaked_markersizevalue , c(1, ifelse(isolate(input$mapdisplayvar_switch),54,34))),#smaller circles if change
+          radius = ~ scales::rescale( tweaked_markersizevalue , c(1, ifelse(isolate(input$mapdisplayvar_switch),maxmarker+4,minmarker+4))),#smaller circles if change
           color = 'black',
           weight = 2,
           fillOpacity = 0,
@@ -319,7 +325,7 @@ function(input, output, session) {
         addCircleMarkers(
           data = mapdata,
           label = ~Company,#label will be the marker hover
-          radius = ~ scales::rescale( tweaked_markersizevalue , c(1, ifelse(isolate(input$mapdisplayvar_switch),50,30))),#smaller circles if change
+          radius = ~ scales::rescale( tweaked_markersizevalue , c(1, ifelse(isolate(input$mapdisplayvar_switch),maxmarker,minmarker))),#smaller circles if change
           color = ~palette(mapdisplay_column),
           fillColor = ~palette(mapdisplay_column),
           opacity = 0.75,
