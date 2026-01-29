@@ -113,15 +113,20 @@ fluidPage(
                          sidebarPanel(
                            h4(strong("Drag/zoom on map")),
                           h4(strong("Hover for name")),
-                          h4(strong("Click on firms for more details")),
+                          h4(strong("Click on firms for more details.")),
+                          p(strong("In the firm popup, use 'yes/no' if you think it does/doesn't belong to a sector. Once you've made some suggestions, export to CSV bottom left. That data can go straight back into the training model.")),
                           sliderInput("employee_count_range",
                                       label = "Employee count range (inclusive):",
                                       min = 10, max = 500, value = c(10, 500)),
                           sector_percentile_sliders(),
                           toggleSwitch(),
                            # uiOutput("mapdisplayvar_switch")#placeholder, will create toggle switch in server
-                           htmlOutput("firm_count"),#reactive displays current count of firms being shown on map    
-                           htmlOutput("employee_count")#reactive displays current count of employees in selected firms
+                           htmlOutput("firm_count"),#reactive displays current count of firms being shown on map
+                           htmlOutput("employee_count"),#reactive displays current count of employees in selected firms
+                           hr(),
+                           h5(strong("Training Data Collection")),
+                           htmlOutput("classification_count"),
+                           downloadButton("export_classifications", "Export Classifications")
                          ),
                          mainPanel(
                            leafletOutput("map", height = 1000))

@@ -45,14 +45,26 @@ sy_boundaries <- readRDS('data/mapdata/sy_localauthorityboundaries.rds')
 #Will load in there so don't need initial code here
 # saveRDS(sectors,'data/initialSectionNames.rds')
 
-reactive_values <- 
+reactive_values <-
   reactiveValues(
     ch = ch,#put the dataframe in a reactive context so other reactives can see it
     count_of_firms = 1,
     count_of_employees = 0,
     stored_slidermin = 0,#Used so we can revert to previous values if the slider range would make firm count zero
     stored_slidermax = 0,
-    stored_maxfirmcount = 0
+    stored_maxfirmcount = 0,
+    # Storage for training data classifications
+    classifications = data.frame(
+      company_number = character(),
+      company_name = character(),
+      sector = character(),
+      classification = character(),
+      comment = character(),
+      timestamp = character(),
+      stringsAsFactors = FALSE
+    ),
+    # Temp storage for pending classification (before modal submission)
+    pending_classification = NULL
   )
 
 
@@ -72,6 +84,12 @@ function(input, output, session) {
   })
   
   output$employee_count <- renderUI(HTML(paste0("Number of employees in selected firms: <strong>", reactive_values$count_of_employees, "</strong>")))
+
+  # Classification count display
+  output$classification_count <- renderUI({
+    n <- nrow(reactive_values$classifications)
+    HTML(paste0("Classifications collected: <strong>", n, "</strong>"))
+  })
 
   # Disable sliders on startup (toggles default to OFF)
   shinyjs::disable("health_tech_percentile_range")
@@ -111,6 +129,74 @@ function(input, output, session) {
       shinyjs::disable("defence_percentile_range")
     }
   })
+
+  # Classification workflow - when Yes/No clicked in popup
+  observeEvent(input$classify_firm, {
+    req(input$classify_firm)
+
+    # Store pending classification
+    reactive_values$pending_classification <- list(
+      company_number = input$classify_firm$company,
+      company_name = input$classify_firm$name,
+      sector = input$classify_firm$sector,
+      classification = input$classify_firm$label
+    )
+
+    # Show modal with classification summary and optional comment
+    showModal(modalDialog(
+      title = "Confirm Classification",
+      p(strong("Company: "), reactive_values$pending_classification$company_name),
+      p(strong("Sector: "), reactive_values$pending_classification$sector),
+      p(strong("Classification: "),
+        span(reactive_values$pending_classification$classification,
+             style = ifelse(reactive_values$pending_classification$classification == "positive",
+                           "color: green; font-weight: bold;",
+                           "color: red; font-weight: bold;"))),
+      hr(),
+      textAreaInput("classification_comment", "Add comment (optional):",
+                    placeholder = "Any notes about this classification...",
+                    rows = 3, width = "100%"),
+      footer = tagList(
+        modalButton("Cancel"),
+        actionButton("submit_classification", "Submit", class = "btn-primary")
+      )
+    ))
+  })
+
+  # Process classification submission
+  observeEvent(input$submit_classification, {
+    req(reactive_values$pending_classification)
+
+    new_row <- data.frame(
+      company_number = reactive_values$pending_classification$company_number,
+      company_name = reactive_values$pending_classification$company_name,
+      sector = reactive_values$pending_classification$sector,
+      classification = reactive_values$pending_classification$classification,
+      comment = ifelse(is.null(input$classification_comment) || input$classification_comment == "",
+                       "", input$classification_comment),
+      timestamp = as.character(Sys.time()),
+      stringsAsFactors = FALSE
+    )
+
+    reactive_values$classifications <- rbind(
+      reactive_values$classifications,
+      new_row
+    )
+
+    # Clear pending and close modal
+    reactive_values$pending_classification <- NULL
+    removeModal()
+  })
+
+  # Download handler for classifications export
+  output$export_classifications <- downloadHandler(
+    filename = function() {
+      paste0("sector_classifications_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".csv")
+    },
+    content = function(file) {
+      write.csv(reactive_values$classifications, file, row.names = FALSE)
+    }
+  )
 
   #OBSERVED EVENTS FOR THE COMPANIES HOUSE DATAFRAME----
   
@@ -374,6 +460,55 @@ function(input, output, session) {
           group = 'firms'
         ) 
       
+      # Build popup content with classification buttons
+      # Escape single quotes in company names for JavaScript
+      escaped_names <- gsub("'", "\\\\'", mapdata$Company)
+
+      # Build classification buttons for each sector
+      sector_buttons <- sapply(seq_len(nrow(mapdata)), function(i) {
+        company_num <- mapdata$CompanyNumber[i]
+        company_name <- escaped_names[i]
+
+        sectors_html <- sapply(c("health_tech", "clean_energy", "advanced_manufacturing", "defence"), function(sector) {
+          sector_label <- switch(sector,
+            "health_tech" = "Health Tech",
+            "clean_energy" = "Clean Energy",
+            "advanced_manufacturing" = "Adv. Manuf.",
+            "defence" = "Defence"
+          )
+          paste0(
+            '<div style="margin: 2px 0;">',
+            '<span style="display: inline-block; width: 80px;">', sector_label, ':</span>',
+            '<button style="margin: 1px; padding: 2px 8px; background-color: #28a745; color: white; border: none; cursor: pointer;" ',
+            'onclick="Shiny.setInputValue(\'classify_firm\', {company: \'', company_num,
+            '\', name: \'', company_name,
+            '\', sector: \'', sector,
+            '\', label: \'positive\', time: Date.now()})">Yes</button> ',
+            '<button style="margin: 1px; padding: 2px 8px; background-color: #dc3545; color: white; border: none; cursor: pointer;" ',
+            'onclick="Shiny.setInputValue(\'classify_firm\', {company: \'', company_num,
+            '\', name: \'', company_name,
+            '\', sector: \'', sector,
+            '\', label: \'negative\', time: Date.now()})">No</button>',
+            '</div>'
+          )
+        })
+        paste(sectors_html, collapse = "")
+      })
+
+      popup_content <- paste0(
+        '<br><strong><a href="https://', mapdata$website, '" target="_blank">', mapdata$Company, '</a></strong><br>',
+        "Employees this year: ", mapdata$Employees_thisyear, "<br>",
+        "Employees last year: ", mapdata$Employees_lastyear, "<br>",
+        "Change from last year: ", percenttext, "<br>",
+        "Incorporation date: ", mapdata$IncorporationDate, '<br>',
+        'Most recent accounts scraped: ', mapdata$enddate, '<br>',
+        '<strong><a href="', paste0("https://find-and-update.company-information.service.gov.uk/company/", mapdata$CompanyNumber),
+        '" target="_blank">Companies House page</a></strong>',
+        '<hr style="margin: 8px 0;">',
+        '<strong>Classify for training:</strong><br>',
+        sector_buttons
+      )
+
       #Top layer with labels etc
       leafletProxy('map') %>%
         addCircleMarkers(
@@ -383,8 +518,7 @@ function(input, output, session) {
           color = ~palette(mapdisplay_column),
           fillColor = ~palette(mapdisplay_column),
           opacity = 0.75,
-          popup = paste0('<br><strong><a href="https://',mapdata$website,'" target="_blank">',mapdata$Company,'</a>',"</strong><br>","Employees this year: ",mapdata$Employees_thisyear,"<br>Employees last year: ",mapdata$Employees_lastyear,"<br>Change from last year: ",percenttext,"<br>Incorporation date: ",mapdata$IncorporationDate,'<br>Most recent accounts scraped: ',mapdata$enddate,'<br><strong><a href="',paste0("https://find-and-update.company-information.service.gov.uk/company/",mapdata$CompanyNumber),'" target="_blank">Companies House page</a>',"</strong>"),#this does NOT need to be in formula for some arbitrary reason
-          # popup = paste0("<strong>",mapdata$Company,"</strong><br>","Employees this year: ",mapdata$Employees_thisyear,"<br>Employees last year: ",mapdata$Employees_lastyear,"<br>Change from last year: ",percenttext,"<br>Incorporation date: ",mapdata$IncorporationDate,'<br>Most recent accounts scraped: ',mapdata$enddate,'<br><strong><a href="',paste0("https://find-and-update.company-information.service.gov.uk/company/",mapdata$CompanyNumber),'" target="_blank">Companies House page</a>',"</strong>"),#this does NOT need to be in formula for some arbitrary reason
+          popup = popup_content,
           group = 'firms'
         ) %>%
         addLegend("topright", pal = palette, values = mapdata$mapdisplay_column,
