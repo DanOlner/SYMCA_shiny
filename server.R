@@ -72,7 +72,46 @@ function(input, output, session) {
   })
   
   output$employee_count <- renderUI(HTML(paste0("Number of employees in selected firms: <strong>", reactive_values$count_of_employees, "</strong>")))
-  
+
+  # Disable sliders on startup (toggles default to OFF)
+  shinyjs::disable("health_tech_percentile_range")
+  shinyjs::disable("clean_energy_percentile_range")
+  shinyjs::disable("advanced_manufacturing_percentile_range")
+  shinyjs::disable("defence_percentile_range")
+
+  # Enable/disable sliders based on toggle state
+  observeEvent(input$health_tech_enabled, {
+    if (input$health_tech_enabled) {
+      shinyjs::enable("health_tech_percentile_range")
+    } else {
+      shinyjs::disable("health_tech_percentile_range")
+    }
+  })
+
+  observeEvent(input$clean_energy_enabled, {
+    if (input$clean_energy_enabled) {
+      shinyjs::enable("clean_energy_percentile_range")
+    } else {
+      shinyjs::disable("clean_energy_percentile_range")
+    }
+  })
+
+  observeEvent(input$advanced_manufacturing_enabled, {
+    if (input$advanced_manufacturing_enabled) {
+      shinyjs::enable("advanced_manufacturing_percentile_range")
+    } else {
+      shinyjs::disable("advanced_manufacturing_percentile_range")
+    }
+  })
+
+  observeEvent(input$defence_enabled, {
+    if (input$defence_enabled) {
+      shinyjs::enable("defence_percentile_range")
+    } else {
+      shinyjs::disable("defence_percentile_range")
+    }
+  })
+
   #OBSERVED EVENTS FOR THE COMPANIES HOUSE DATAFRAME----
   
   #Filter SIC digit type when digit dropdown changes
@@ -151,59 +190,84 @@ function(input, output, session) {
       
     }
     
+    # Filter by sector percentiles (only when toggle is enabled) and employee count
+    # Percentile values are 0-1 in data, sliders are 0-100
     df <- reactive_values$ch %>%
       filter(
-        sector == input$sector_chosen,
-        Employees_thisyear >= input$employee_count_range[1] & Employees_thisyear <= isolate(input$employee_count_range[2])
+        # Only apply Health Tech filter if toggle is ON
+        !input$health_tech_enabled | (
+          health_tech_percentile >= input$health_tech_percentile_range[1] / 100 &
+          health_tech_percentile <= input$health_tech_percentile_range[2] / 100
+        ),
+        # Only apply Clean Energy filter if toggle is ON
+        !input$clean_energy_enabled | (
+          clean_energy_percentile >= input$clean_energy_percentile_range[1] / 100 &
+          clean_energy_percentile <= input$clean_energy_percentile_range[2] / 100
+        ),
+        # Only apply Advanced Manufacturing filter if toggle is ON
+        !input$advanced_manufacturing_enabled | (
+          advanced_manufacturing_percentile >= input$advanced_manufacturing_percentile_range[1] / 100 &
+          advanced_manufacturing_percentile <= input$advanced_manufacturing_percentile_range[2] / 100
+        ),
+        # Only apply Defence filter if toggle is ON
+        !input$defence_enabled | (
+          defence_percentile >= input$defence_percentile_range[1] / 100 &
+          defence_percentile <= input$defence_percentile_range[2] / 100
+        ),
+        # Employee count filter always applies
+        Employees_thisyear >= input$employee_count_range[1],
+        Employees_thisyear <= input$employee_count_range[2]
       )
-    
-    
+
+
     reactive_values$count_of_firms <- nrow(df)
-    
+
     reactive_values$count_of_employees <- sum(df$Employees_thisyear, na.rm = T)
-    
+
     df
-    
-  })
-  
-  
-  
-  #Update slider values if filtering by sector changes
-  observe({
-
-    #Filter by sector to get slider vals from
-    #Can use global ch, just need that employee val range
-    df <- ch %>% filter(
-      sector == input$sector_chosen
-    )
-    
-    inc('Setting slider vals after sector change. Size of df: ', nrow(df))
-
-    # cat(inc(),": Slider update code called. min and max employees this year:\n")
-    # cat(min(df$Employees_thisyear),",",max(df$Employees_thisyear),"\n")
-    ct(": 'Slider update values after sector change' called. min and max employees this year: ",min(df$Employees_thisyear),",",max(df$Employees_thisyear))
-
-    # cat('df being used in slider update:\n')
-    # glimpse(df)
-
-    #Add ten to min value if there are firms with more than ten employees
-    #And there are 25+ firms in this sector
-    #therwise set to zero
-    mintouse <- ifelse(min(df$Employees_thisyear) + 10 < max(df$Employees_thisyear) & nrow(df) > 24, 10, 0)
-
-    updateSliderInput(session, "employee_count_range",
-                      value = c(mintouse, max(df$Employees_thisyear)),
-                      min = 0,
-                      max = max(df$Employees_thisyear),
-                      step = 1
-    )
-    
-    #Store max df employees from here as will be correct value if need to reset elsewhere
-    reactive_values$stored_maxfirmcount <- max(df$Employees_thisyear)
-
-    # ct("range bar now outputting: ", isolate(input$employee_count_range))
 
   })
+  
+  
+  
+  # Commented out - no longer filtering by single sector, using percentile sliders instead
+
+  # #Update slider values if filtering by sector changes
+  # observe({
+  #
+  #   #Filter by sector to get slider vals from
+  #   #Can use global ch, just need that employee val range
+  #   df <- ch %>% filter(
+  #     sector == input$sector_chosen
+  #   )
+  #
+  #   inc('Setting slider vals after sector change. Size of df: ', nrow(df))
+  #
+  #   # cat(inc(),": Slider update code called. min and max employees this year:\n")
+  #   # cat(min(df$Employees_thisyear),",",max(df$Employees_thisyear),"\n")
+  #   ct(": 'Slider update values after sector change' called. min and max employees this year: ",min(df$Employees_thisyear),",",max(df$Employees_thisyear))
+  #
+  #   # cat('df being used in slider update:\n')
+  #   # glimpse(df)
+  #
+  #   #Add ten to min value if there are firms with more than ten employees
+  #   #And there are 25+ firms in this sector
+  #   #therwise set to zero
+  #   mintouse <- ifelse(min(df$Employees_thisyear) + 10 < max(df$Employees_thisyear) & nrow(df) > 24, 10, 0)
+  #
+  #   updateSliderInput(session, "employee_count_range",
+  #                     value = c(mintouse, max(df$Employees_thisyear)),
+  #                     min = 0,
+  #                     max = max(df$Employees_thisyear),
+  #                     step = 1
+  #   )
+  #
+  #   #Store max df employees from here as will be correct value if need to reset elsewhere
+  #   reactive_values$stored_maxfirmcount <- max(df$Employees_thisyear)
+  #
+  #   # ct("range bar now outputting: ", isolate(input$employee_count_range))
+  #
+  # })
   
   
   

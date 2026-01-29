@@ -39,7 +39,7 @@ sy = readRDS('local/data/sy_ch_PROCESSED_Dec2025.rds')
 
 sy = sy %>%
   inner_join(
-    chml %>% select(CompanyName,CompanyNumber,accountcode,website,website_source,setfit_health_tech:setfit_best_sector),
+    chml %>% select(CompanyName,CompanyNumber,accountcode,website,setfit_health_tech:setfit_best_sector),
     by = c('CompanyName','CompanyNumber','accountcode')
   )
 
@@ -58,7 +58,7 @@ sy <- sy %>% mutate(across(where(is.character), clean_utf8))
 # Very little of the data in ch columns actually gets used
 # I think I only need these...
 sy = sy %>% 
-  select(Company,CompanyNumber,IncorporationDate,enddate,Employees_thisyear,Employees_lastyear,
+  select(Company,CompanyNumber,IncorporationDate,enddate,Employees_thisyear,Employees_lastyear,website,
          health_tech = setfit_health_tech,
          clean_energy = setfit_clean_energy,
          advanced_manufacturing = setfit_advanced_manufacturing,
@@ -68,23 +68,15 @@ sy = sy %>%
   employee_diff_percent = round(percent_change(Employees_lastyear,Employees_thisyear),1)
 )
 
-# And make long by sector
-sy = sy %>% 
-  pivot_longer(
-    cols = health_tech:defence,
-    names_to = 'sector',
-    values_to = 'score'
-  )
-
-# And zscore that up too
-# Or actually percentile makes more sense, they're not distributed very evenly
-# Looks good
-sy = sy %>% 
-  group_by(sector) %>% 
+# Keep wide format - one row per firm, with percentile columns for each sector
+# This allows independent filtering on each sector's percentile
+sy = sy %>%
   mutate(
-    percentile = percent_rank(score)
-    ) %>% 
-  ungroup()
+    health_tech_percentile = percent_rank(health_tech),
+    clean_energy_percentile = percent_rank(clean_energy),
+    advanced_manufacturing_percentile = percent_rank(advanced_manufacturing),
+    defence_percentile = percent_rank(defence)
+  )
 
 # Convert to lonlat...
 sy = sy %>% st_transform("EPSG:4326")

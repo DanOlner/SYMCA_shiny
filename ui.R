@@ -9,20 +9,60 @@ ml_sector_labels <- c(
   "defence" = "Defence"
 )
 
-default_sector = "health_tech"
-
 # ui elements  ----
 
-sectorselect_input_panel <-
-  function(){
-    selectInput(
-      inputId = 'sector_chosen',
-      label = 'Select ML sector:',
-      choices = setNames(ml_sectors, ml_sector_labels),
-      selected = default_sector,
-      selectize = TRUE
+# Sector percentile sliders - filter firms by their classification strength in each sector
+# Each sector has a toggle to enable/disable the filter, plus a range slider
+sector_percentile_sliders <- function() {
+  tagList(
+    h5(strong("Filter by sector percentile (0-100%):")),
+    p("Toggle ON to filter by that sector's percentile range."),
+
+    # Health Tech
+    fluidRow(
+      column(3, materialSwitch("health_tech_enabled", "Health Tech", value = FALSE, status = "success")),
+      column(9, sliderInput("health_tech_percentile_range",
+                label = NULL,
+                min = 0, max = 100, value = c(0, 100), step = 1))
+    ),
+
+    # Clean Energy
+    fluidRow(
+      column(3, materialSwitch("clean_energy_enabled", "Clean Energy", value = FALSE, status = "success")),
+      column(9, sliderInput("clean_energy_percentile_range",
+                label = NULL,
+                min = 0, max = 100, value = c(0, 100), step = 1))
+    ),
+
+    # Advanced Manufacturing
+    fluidRow(
+      column(3, materialSwitch("advanced_manufacturing_enabled", "Adv. Manuf.", value = FALSE, status = "success")),
+      column(9, sliderInput("advanced_manufacturing_percentile_range",
+                label = NULL,
+                min = 0, max = 100, value = c(0, 100), step = 1))
+    ),
+
+    # Defence
+    fluidRow(
+      column(3, materialSwitch("defence_enabled", "Defence", value = FALSE, status = "success")),
+      column(9, sliderInput("defence_percentile_range",
+                label = NULL,
+                min = 0, max = 100, value = c(0, 100), step = 1))
     )
-  }
+  )
+}
+
+# Commented out - replaced by percentile sliders
+# sectorselect_input_panel <-
+#   function(){
+#     selectInput(
+#       inputId = 'sector_chosen',
+#       label = 'Select ML sector:',
+#       choices = setNames(ml_sectors, ml_sector_labels),
+#       selected = default_sector,
+#       selectize = TRUE
+#     )
+#   }
 
 
 toggleSwitch <- 
@@ -72,12 +112,12 @@ fluidPage(
                        sidebarLayout(
                          sidebarPanel(
                            h4(strong("Drag/zoom on map")),
-                           h4(strong("Hover for name")),
-                           h4(strong("Click on firms for more details")),
-                          sectorselect_input_panel(),
+                          h4(strong("Hover for name")),
+                          h4(strong("Click on firms for more details")),
                           sliderInput("employee_count_range",
                                       label = "Employee count range (inclusive):",
                                       min = 0, max = 500, value = c(1, 500)),
+                          sector_percentile_sliders(),
                           toggleSwitch(),
                            # uiOutput("mapdisplayvar_switch")#placeholder, will create toggle switch in server
                            htmlOutput("firm_count"),#reactive displays current count of firms being shown on map    
