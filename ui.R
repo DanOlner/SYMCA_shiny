@@ -36,10 +36,10 @@ sector_percentile_sliders <- function() {
 
     # Advanced Manufacturing
     fluidRow(
-      column(3, materialSwitch("advanced_manufacturing_enabled", "Adv. Manuf.", value = FALSE, status = "success")),
+      column(3, materialSwitch("advanced_manufacturing_enabled", "Adv. Manuf.", value = TRUE, status = "success")),
       column(9, sliderInput("advanced_manufacturing_percentile_range",
                 label = NULL,
-                min = 0, max = 100, value = c(0, 100), step = 1))
+                min = 0, max = 100, value = c(90, 100), step = 1))
     ),
 
     # Defence
@@ -103,7 +103,7 @@ fluidPage(
   
   useShinyjs(),
   
-  titlePanel("South Yorkshire Companies House map"),
+  titlePanel("South Yorkshire Companies House ML sectors map"),
   
   # Output: Tabset w/ plot, summary, and table ----
   tabsetPanel(type = "tabs",
@@ -116,7 +116,7 @@ fluidPage(
                           h4(strong("Click on firms for more details")),
                           sliderInput("employee_count_range",
                                       label = "Employee count range (inclusive):",
-                                      min = 0, max = 500, value = c(1, 500)),
+                                      min = 10, max = 500, value = c(10, 500)),
                           sector_percentile_sliders(),
                           toggleSwitch(),
                            # uiOutput("mapdisplayvar_switch")#placeholder, will create toggle switch in server
