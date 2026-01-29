@@ -2,6 +2,17 @@
 #For checking on call order
 callcounter = 0
 
+# Helpers
+g <- function(x) glimpse(x)
+v <- function(x) View(x)
+
+#Wrap grepl to do tidier version of this when e.g. filtering for terms
+#gq = "grepl quick!"
+qg <- function(...) grepl(..., ignore.case = T)
+
+percent_change <- function(x,y) ((y - x) / x) * 100
+
+
 #Text output, including a counter each time called and a line break
 inc <- function( ... ){
   

@@ -1,13 +1,15 @@
-#Load initial SIC section names - need to populate dropdown in the UI
-default_digit = "Section"
-# default_digit = "2 digit"
+# ML sector definitions - the four machine-learned categories
+ml_sectors <- c("health_tech", "clean_energy", "advanced_manufacturing", "defence")
 
-#Load list of sectors based on what SIC digit we're viewing
-sectors<- readRDS('data/SICorderedlookup.rds') %>% filter(SIC_digit == default_digit) %>% select(sector_name) %>% pull %>% unique
+# Human-readable labels for display
+ml_sector_labels <- c(
+  "health_tech" = "Health Tech",
+  "clean_energy" = "Clean Energy",
+  "advanced_manufacturing" = "Advanced Manufacturing",
+  "defence" = "Defence"
+)
 
-
-default_sector = "Manufacturing"
-# default_sector = "72 : Scientific research and development"
+default_sector = "health_tech"
 
 # ui elements  ----
 
@@ -15,22 +17,10 @@ sectorselect_input_panel <-
   function(){
     selectInput(
       inputId = 'sector_chosen',
-      label = 'Select sector from dropdown or begin inputting its name below:',
-      choices = sectors,
+      label = 'Select ML sector:',
+      choices = setNames(ml_sectors, ml_sector_labels),
       selected = default_sector,
-      selectize = T,
-      
-    )
-  }
-
-sicdigitselect_input_panel <-
-  function(){
-    selectInput(
-      inputId = 'sicdigit_chosen',
-      label = 'Select SIC digit level (Section to 5 digit) [disabled]',
-      choices = readRDS('data/initialSICDigitNames.rds'),
-      selected = default_digit,
-      selectize = T
+      selectize = TRUE
     )
   }
 
@@ -84,12 +74,11 @@ fluidPage(
                            h4(strong("Drag/zoom on map")),
                            h4(strong("Hover for name")),
                            h4(strong("Click on firms for more details")),
-                           sectorselect_input_panel(),
-                           sicdigitselect_input_panel(),
-                           sliderInput("employee_count_range",
-                                       label = "Employee count range (inclusive):",
-                                       min = 0, max = 957, value = c(10,957)),
-                           toggleSwitch(),
+                          sectorselect_input_panel(),
+                          sliderInput("employee_count_range",
+                                      label = "Employee count range (inclusive):",
+                                      min = 0, max = 500, value = c(1, 500)),
+                          toggleSwitch(),
                            # uiOutput("mapdisplayvar_switch")#placeholder, will create toggle switch in server
                            htmlOutput("firm_count"),#reactive displays current count of firms being shown on map    
                            htmlOutput("employee_count")#reactive displays current count of employees in selected firms

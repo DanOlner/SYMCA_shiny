@@ -12,6 +12,88 @@ library(sf)
 # saveRDS(sy_boundaries, 'data/mapdata/sy_localauthorityboundaries.rds')
 
 
+
+
+# Prep ML sector classification version (2026) to match existing format----
+
+# Via companies house open
+
+# Just looking at the existing one, checking structure
+ch = readRDS('data/companieshouse_employees_n_sectors_southyorkshire_long.rds')
+
+ch <- ch %>% 
+  mutate(
+    employee_diff_percent = round(employee_diff_percent)
+  )
+
+# View sample...
+ch %>% sample_n(200) %>% View
+
+
+# OK, get the *much smaller, only ~1.5K firms* data via companies house open
+# With the four bespoke categories in
+chml = arrow::read_parquet('local/data/samplebatch_setfit_classified.parquet')
+
+# Join with geocoded CH data (latest)
+sy = readRDS('local/data/sy_ch_PROCESSED_Dec2025.rds')
+
+sy = sy %>%
+  inner_join(
+    chml %>% select(CompanyName,CompanyNumber,accountcode,website,website_source,setfit_health_tech:setfit_best_sector),
+    by = c('CompanyName','CompanyNumber','accountcode')
+  )
+
+# Clean invalid UTF-8 characters from text columns that break tmap
+# (web-scraped text often contains malformed characters)
+clean_utf8 <- function(x) {
+  if (is.character(x)) {
+    iconv(x, from = "UTF-8", to = "UTF-8", sub = "")
+  } else {
+    x
+  }
+}
+
+sy <- sy %>% mutate(across(where(is.character), clean_utf8))
+
+# Very little of the data in ch columns actually gets used
+# I think I only need these...
+sy = sy %>% 
+  select(Company,CompanyNumber,IncorporationDate,enddate,Employees_thisyear,Employees_lastyear,
+         health_tech = setfit_health_tech,
+         clean_energy = setfit_clean_energy,
+         advanced_manufacturing = setfit_advanced_manufacturing,
+         defence = setfit_defence
+         ) %>% 
+  mutate(
+  employee_diff_percent = round(percent_change(Employees_lastyear,Employees_thisyear),1)
+)
+
+# And make long by sector
+sy = sy %>% 
+  pivot_longer(
+    cols = health_tech:defence,
+    names_to = 'sector',
+    values_to = 'score'
+  )
+
+# And zscore that up too
+# Or actually percentile makes more sense, they're not distributed very evenly
+# Looks good
+sy = sy %>% 
+  group_by(sector) %>% 
+  mutate(
+    percentile = percent_rank(score)
+    ) %>% 
+  ungroup()
+
+# Convert to lonlat...
+sy = sy %>% st_transform("EPSG:4326")
+
+# OK, save for shiny use
+saveRDS(sy, 'data/ch_ml_firms.rds')
+
+
+
 #Prep companies house DF to be used live (order of this may be messy!)----
 
 #Quick hack to check toggle switch works - 

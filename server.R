@@ -18,26 +18,20 @@ if(is_installed("reactlog")){
 
 #companies house data for South Yorkshire
 #Version with SIC digit types in a single column
-ch <- readRDS('data/companieshouse_employees_n_sectors_southyorkshire_long.rds') %>%
-  select(Company,CompanyNumber,IncorporationDate,enddate,Employees_thisyear,Employees_lastyear,SIC_digit,sector_name,employee_diff_percent)
+# ch <- readRDS('data/companieshouse_employees_n_sectors_southyorkshire_long.rds') %>%
+#   select(Company,CompanyNumber,IncorporationDate,enddate,Employees_thisyear,Employees_lastyear,SIC_digit,sector_name,employee_diff_percent)
+# 
+# ch <- ch %>% 
+#   mutate(
+#     employee_diff_percent = round(employee_diff_percent)
+#   )
 
-ch <- ch %>% 
-  mutate(
-    employee_diff_percent = round(employee_diff_percent)
-  )
+# Version just for ML-categorised firms
+ch = readRDS('data/ch_ml_firms.rds')
 
-#Ordered SIC lookup, so sectors are listed in correct order in dropdown (see prepcode)
-SIClookup_long <- readRDS('data/SICorderedlookup.rds')
 
 #South yorkshire local authority boundaries
 sy_boundaries <- readRDS('data/mapdata/sy_localauthorityboundaries.rds')
-
-#SIC digit names from the columns - needs reordering
-SICdigitnames <- colnames(ch)[which(colnames(ch) %in% c('SIC_SECTION_NAME','SIC_2DIGIT_NAME','SIC_3DIGIT_NAME','SIC_5DIGIT_NAME'))][c(4,2,3,1)]
-
-
-#Begin by viewing SIC section
-selectedSIClevel <- 1
 
 #Un-geo first (otherwise distinct gets every unique geo-point!)
 # sectors <- ch %>%
@@ -64,9 +58,7 @@ reactive_values <-
 
 #SERVER FUNCTIONS----
 
-function(input, output, session) {
-  
-  disable("sicdigit_chosen") 
+function(input, output, session) { 
   
   # MISC REACTIVES----
   
@@ -159,10 +151,9 @@ function(input, output, session) {
       
     }
     
-    df <- reactive_values$ch %>% 
+    df <- reactive_values$ch %>%
       filter(
-        sector_name == input$sector_chosen,
-        SIC_digit == input$sicdigit_chosen,
+        sector == input$sector_chosen,
         Employees_thisyear >= input$employee_count_range[1] & Employees_thisyear <= isolate(input$employee_count_range[2])
       )
     
@@ -177,21 +168,20 @@ function(input, output, session) {
   
   
   
-  #Update slider values if filtering by sector or SIC digit changes
+  #Update slider values if filtering by sector changes
   observe({
 
-    #combo of both sector and digit to get slider vals from
+    #Filter by sector to get slider vals from
     #Can use global ch, just need that employee val range
     df <- ch %>% filter(
-      sector_name == input$sector_chosen,
-      SIC_digit == input$sicdigit_chosen
+      sector == input$sector_chosen
     )
     
-    inc('Setting slider vals after sector / SIC digit change. Size of df: ', nrow(df))
+    inc('Setting slider vals after sector change. Size of df: ', nrow(df))
 
     # cat(inc(),": Slider update code called. min and max employees this year:\n")
     # cat(min(df$Employees_thisyear),",",max(df$Employees_thisyear),"\n")
-    ct(": 'Slider update values after sector/digit change' called. min and max employees this year: ",min(df$Employees_thisyear),",",max(df$Employees_thisyear))
+    ct(": 'Slider update values after sector change' called. min and max employees this year: ",min(df$Employees_thisyear),",",max(df$Employees_thisyear))
 
     # cat('df being used in slider update:\n')
     # glimpse(df)
